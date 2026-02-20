@@ -63,13 +63,18 @@
             transform: scale(1);
             cursor: not-allowed;
         }
+
+        .service-card-selected {
+            border-color: #f59e0b !important;
+            background-color: rgba(245, 158, 11, 0.1) !important;
+        }
     </style>
 </head>
 <body class="text-zinc-100">
     <div id="root"></div>
 
     <script type="text/babel" data-type="module">
-        const { useState, useEffect, useRef, useCallback } = React;
+        const { useState, useEffect, useRef, useCallback, useMemo } = React;
 
         // --- CONFIGURAÇÃO SUPABASE ---
         const SUPABASE_URL = "https://qokhszjgkzcsauvkdlia.supabase.co";
@@ -108,12 +113,12 @@
             const [error, setError] = useState(null);
             const [errorDetail, setErrorDetail] = useState(null);
 
-            const [selection, setSelection] = useState({ service: null, date: '', time: '', name: '', phone: '' });
+            // Agora 'services' na seleção é um array
+            const [selection, setSelection] = useState({ services: [], date: '', time: '', name: '', phone: '' });
             const [newService, setNewService] = useState({ name: '', price: '', duration: '' });
 
             const fetchData = useCallback(async () => {
                 setError(null);
-                setErrorDetail(null);
                 try {
                     const [resBookings, resServices, resSettings] = await Promise.all([
                         client.from('bookings').select('*').order('date', { ascending: true }),
@@ -128,14 +133,8 @@
                     setServices(resServices.data || []);
                     if (resSettings.data) setConfig(resSettings.data);
                 } catch (err) {
-                    console.error("Erro na comunicação:", err);
-                    if (err.message === 'Failed to fetch' || err.name === 'TypeError') {
-                        setError("Ligação ao banco de dados bloqueada.");
-                        setErrorDetail("Desativa AdBlockers ou Brave Shields para este site.");
-                    } else {
-                        setError("Erro ao ligar ao servidor.");
-                        setErrorDetail(err.message || "Verifica o Supabase.");
-                    }
+                    setError("Erro ao ligar ao servidor.");
+                    setErrorDetail(err.message);
                 } finally {
                     setInitialLoading(false);
                 }
@@ -143,11 +142,7 @@
 
             useEffect(() => {
                 fetchData();
-                const channel = client.channel('db-changes')
-                    .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => fetchData())
-                    .on('postgres_changes', { event: '*', schema: 'public', table: 'services' }, () => fetchData())
-                    .subscribe();
-
+                const channel = client.channel('db-changes').subscribe();
                 return () => client.removeChannel(channel);
             }, [fetchData]);
 
@@ -156,20 +151,44 @@
                 return (Number(config.maxPerSlot) || 2) - ocupados;
             };
 
+            // Função para alternar seleção de serviço
+            const toggleService = (service) => {
+                setSelection(prev => {
+                    const exists = prev.services.find(s => s.id === service.id);
+                    if (exists) {
+                        return { ...prev, services: prev.services.filter(s => s.id !== service.id) };
+                    } else {
+                        return { ...prev, services: [...prev.services, service] };
+                    }
+                });
+            };
+
+            // Cálculo do total selecionado
+            const totalSelection = useMemo(() => {
+                return selection.services.reduce((acc, s) => {
+                    const price = parseFloat(s.price.replace(/[^\d,.]/g, '').replace(',', '.'));
+                    return acc + (isNaN(price) ? 0 : price);
+                }, 0);
+            }, [selection.services]);
+
             const handleBooking = async (e) => {
                 e.preventDefault();
                 if (selection.phone.length < 10) return;
                 
                 setLoading(true);
-                setError(null);
                 try {
-                    const cleanService = { name: selection.service.name, price: selection.service.price };
+                    // Prepara o objeto de serviço para o banco (lista de nomes e total)
+                    const serviceSummary = {
+                        items: selection.services.map(s => ({ name: s.name, price: s.price })),
+                        total: `R$ ${totalSelection.toFixed(2)}`.replace('.', ',')
+                    };
+
                     const { error: bErr } = await client.from('bookings').insert([{
                         name: selection.name,
                         phone: selection.phone,
                         date: selection.date,
                         time: selection.time,
-                        service: cleanService
+                        service: serviceSummary // Salva como JSONB
                     }]);
                     if (bErr) throw bErr;
                     setStep(5);
@@ -184,22 +203,20 @@
             const addService = async () => {
                 if (!newService.name) return;
                 setLoading(true);
-                const { error } = await client.from('services').insert([newService]);
-                if (!error) {
-                    setNewService({ name: '', price: '', duration: '' });
-                    fetchData();
-                }
+                await client.from('services').insert([newService]);
+                setNewService({ name: '', price: '', duration: '' });
+                fetchData();
                 setLoading(false);
             };
 
             const deleteService = async (id) => {
-                const { error } = await client.from('services').delete().eq('id', id);
-                if (!error) fetchData();
+                await client.from('services').delete().eq('id', id);
+                fetchData();
             };
 
             const deleteBooking = async (id) => {
-                const { error } = await client.from('bookings').delete().eq('id', id);
-                if (!error) fetchData();
+                await client.from('bookings').delete().eq('id', id);
+                fetchData();
             };
 
             const updateCapacity = async (val) => {
@@ -208,12 +225,9 @@
                 await client.from('settings').upsert({ id: 'global', maxPerSlot: v });
             };
 
-            // Função para limpar e validar o telemóvel
             const handlePhoneInput = (e) => {
-                const val = e.target.value.replace(/\D/g, ''); // Remove tudo que não é número
-                if (val.length <= 11) {
-                    setSelection({...selection, phone: val});
-                }
+                const val = e.target.value.replace(/\D/g, ''); 
+                if (val.length <= 11) setSelection({...selection, phone: val});
             };
 
             return (
@@ -222,13 +236,13 @@
                     <header className="px-6 pt-8 pb-4 bg-zinc-900/50 sticky top-0 z-40 backdrop-blur-md border-b border-white/5">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
-                                <div className="p-2.5 bg-amber-500 rounded-xl text-black shadow-lg shadow-amber-500/20">
+                                <div className="p-2.5 bg-amber-500 rounded-xl text-black shadow-lg">
                                     <Icon name="scissors" size={24} />
                                 </div>
                                 <div>
                                     <h1 className="text-xl font-black italic uppercase tracking-tighter leading-none">Don <span className="text-amber-500">Barber</span></h1>
                                     <span className="text-[10px] font-bold text-amber-500/50 tracking-widest uppercase block mt-1">
-                                        {view === 'user' ? 'Agendamento Online' : 'Painel Staff'}
+                                        {view === 'user' ? 'Agendamento' : 'Painel Staff'}
                                     </span>
                                 </div>
                             </div>
@@ -242,67 +256,74 @@
 
                     <main className="flex-1 px-4 py-6">
                         {error && (
-                            <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex flex-col gap-2 text-red-400 text-xs fade-in">
-                                <div className="flex items-center justify-between w-full">
-                                    <div className="flex items-center gap-2 font-bold uppercase tracking-tighter">
-                                        <Icon name="alert-triangle" size={14} /> Problema Técnico
-                                    </div>
-                                    <button onClick={() => setError(null)}><Icon name="x" size={14}/></button>
-                                </div>
-                                {errorDetail && <p className="opacity-60 font-mono bg-black/20 p-2 rounded">{errorDetail}</p>}
-                                <button onClick={fetchData} className="underline self-start font-bold">Tentar Reconectar</button>
+                            <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-400 text-xs fade-in">
+                                <p className="font-bold uppercase tracking-tighter flex items-center gap-2"><Icon name="alert-triangle" size={14} /> {error}</p>
+                                <button onClick={fetchData} className="underline mt-2">Tentar Reconectar</button>
                             </div>
                         )}
 
                         {view === 'user' ? (
                             <div className="fade-in">
                                 <div className="bg-zinc-900/40 rounded-[2.5rem] border border-zinc-800/50 p-6 shadow-2xl backdrop-blur-sm">
+                                    
+                                    {/* Passo 1: Multi-Seleção de Serviços */}
                                     {step === 1 && (
                                         <div className="space-y-4">
-                                            <h2 className="text-xl font-black italic uppercase px-2 flex justify-between items-center">
-                                                Escolha o Serviço {initialLoading && <div className="loader"></div>}
-                                            </h2>
-                                            <div className="grid gap-3">
-                                                {services.length > 0 ? services.map(s => (
-                                                    <button key={s.id} onClick={() => {setSelection({...selection, service: s}); setStep(2)}} 
-                                                        className="w-full flex items-center justify-between p-5 rounded-3xl bg-zinc-800/40 border border-zinc-700/50 active:scale-95 transition-all text-left group">
-                                                        <div className="flex items-center gap-4">
-                                                            <div className="p-3 bg-zinc-700/50 rounded-2xl text-amber-500 group-hover:bg-amber-500 group-hover:text-black transition-colors"><Icon name="info" /></div>
-                                                            <div>
-                                                                <p className="font-bold text-base leading-tight">{s.name}</p>
-                                                                <p className="text-xs text-zinc-500 font-medium">{s.duration}</p>
-                                                            </div>
-                                                        </div>
-                                                        <span className="font-black text-amber-500 text-lg">{s.price}</span>
-                                                    </button>
-                                                )) : !initialLoading && (
-                                                    <div className="text-center py-12 opacity-30 italic text-sm leading-relaxed">
-                                                        Nenhum serviço disponível.<br/>
-                                                        <span className="text-[10px] uppercase font-black block mt-1 tracking-widest text-amber-500/50">Configure no Painel Staff</span>
-                                                    </div>
-                                                )}
+                                            <div className="px-2">
+                                                <h2 className="text-xl font-black italic uppercase">Serviços</h2>
+                                                <p className="text-xs text-zinc-500 font-medium">Selecione um ou mais serviços abaixo:</p>
                                             </div>
+
+                                            <div className="grid gap-3">
+                                                {services.length > 0 ? services.map(s => {
+                                                    const isSelected = selection.services.find(item => item.id === s.id);
+                                                    return (
+                                                        <button key={s.id} onClick={() => toggleService(s)} 
+                                                            className={`w-full flex items-center justify-between p-5 rounded-3xl border transition-all text-left ${isSelected ? 'service-card-selected' : 'bg-zinc-800/40 border-zinc-700/50'}`}>
+                                                            <div className="flex items-center gap-4">
+                                                                <div className={`p-3 rounded-2xl transition-colors ${isSelected ? 'bg-amber-500 text-black' : 'bg-zinc-700/50 text-amber-500'}`}>
+                                                                    <Icon name={isSelected ? "check" : "plus"} />
+                                                                </div>
+                                                                <div>
+                                                                    <p className="font-bold text-base leading-tight">{s.name}</p>
+                                                                    <p className="text-xs text-zinc-500 font-medium">{s.duration}</p>
+                                                                </div>
+                                                            </div>
+                                                            <span className="font-black text-amber-500 text-lg">{s.price}</span>
+                                                        </button>
+                                                    );
+                                                }) : !initialLoading && <div className="text-center py-12 opacity-30 italic text-sm">Carregando catálogo...</div>}
+                                            </div>
+
+                                            {selection.services.length > 0 && (
+                                                <div className="pt-4 sticky bottom-0">
+                                                    <button onClick={() => setStep(2)} className="w-full py-5 btn-primary rounded-3xl shadow-xl shadow-amber-500/20 flex items-center justify-center gap-3">
+                                                        <span>PRÓXIMO</span>
+                                                        <span className="bg-black/20 px-3 py-1 rounded-full text-xs">Total: R$ {totalSelection.toFixed(2).replace('.', ',')}</span>
+                                                    </button>
+                                                </div>
+                                            )}
                                         </div>
                                     )}
 
+                                    {/* Passo 2: Data */}
                                     {step === 2 && (
                                         <div className="space-y-6 fade-in">
-                                            <h2 className="text-xl font-black italic uppercase">Qual o dia?</h2>
+                                            <h2 className="text-xl font-black italic uppercase">Quando?</h2>
                                             <div className="bg-zinc-800/50 p-4 rounded-3xl border border-zinc-700/50">
                                                 <input type="date" min={new Date().toISOString().split('T')[0]} 
                                                     className="w-full bg-transparent p-4 text-white text-lg font-bold outline-none [color-scheme:dark]" 
                                                     onChange={e => setSelection({...selection, date: e.target.value})} />
                                             </div>
-                                            <button disabled={!selection.date} onClick={() => setStep(3)} className="w-full py-5 btn-primary rounded-3xl shadow-xl shadow-amber-500/20">
-                                                Ver Horários
-                                            </button>
-                                            <button onClick={() => setStep(1)} className="w-full text-zinc-500 font-bold text-xs uppercase tracking-widest">Voltar</button>
+                                            <button disabled={!selection.date} onClick={() => setStep(3)} className="w-full py-5 btn-primary rounded-3xl">VER HORÁRIOS</button>
+                                            <button onClick={() => setStep(1)} className="w-full text-zinc-500 font-bold text-xs uppercase">Voltar</button>
                                         </div>
                                     )}
 
+                                    {/* Passo 3: Horário */}
                                     {step === 3 && (
                                         <div className="space-y-6 fade-in">
-                                            <h2 className="text-xl font-black text-center italic uppercase">Horários Disponíveis</h2>
+                                            <h2 className="text-xl font-black text-center italic uppercase">Horários</h2>
                                             <div className="grid grid-cols-2 gap-3">
                                                 {['09:00', '10:00', '11:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00'].map(t => {
                                                     const vagas = getVagasDisponiveis(selection.date, t);
@@ -311,7 +332,7 @@
                                                         <button key={t} disabled={esgotado} onClick={() => {setSelection({...selection, time: t}); setStep(4)}} 
                                                             className={`py-5 rounded-2xl border font-black transition-all relative ${esgotado ? 'bg-zinc-950 border-zinc-900 text-zinc-800' : 'bg-zinc-800/80 border-zinc-700/50 active:bg-amber-500 active:text-black'}`}>
                                                             {t}
-                                                            {!esgotado && <span className="absolute top-1 right-2 text-[8px] text-amber-500/50 uppercase tracking-tighter">{vagas} vagas</span>}
+                                                            {!esgotado && <span className="absolute top-1 right-2 text-[8px] text-amber-500/50 uppercase">{vagas} vagas</span>}
                                                         </button>
                                                     );
                                                 })}
@@ -320,50 +341,52 @@
                                         </div>
                                     )}
 
+                                    {/* Passo 4: Dados e Resumo */}
                                     {step === 4 && (
                                         <form onSubmit={handleBooking} className="space-y-6 fade-in">
-                                            <h2 className="text-xl font-black italic uppercase">Finalizar Reserva</h2>
-                                            <div className="space-y-4">
-                                                <div className="space-y-1">
-                                                    <label className="text-[10px] font-black text-zinc-500 uppercase px-2 tracking-widest">Nome Completo</label>
-                                                    <input required placeholder="Como te chamas?" className="w-full bg-zinc-800/80 p-5 rounded-2xl border border-zinc-700/50 outline-none focus:border-amber-500 text-white placeholder:opacity-20" 
-                                                        value={selection.name}
-                                                        onChange={e => setSelection({...selection, name: e.target.value})} />
+                                            <h2 className="text-xl font-black italic uppercase">Resumo e Dados</h2>
+                                            
+                                            <div className="p-5 bg-amber-500/5 rounded-3xl border border-amber-500/10 space-y-2">
+                                                <div className="flex flex-wrap gap-1">
+                                                    {selection.services.map(s => (
+                                                        <span key={s.id} className="text-[10px] bg-amber-500 text-black font-black px-2 py-0.5 rounded-full uppercase tracking-tighter">
+                                                            {s.name}
+                                                        </span>
+                                                    ))}
                                                 </div>
-                                                <div className="space-y-1">
-                                                    <label className="text-[10px] font-black text-zinc-500 uppercase px-2 tracking-widest flex justify-between">
-                                                        <span>WhatsApp (DDD + Número)</span>
-                                                        <span className={selection.phone.length >= 10 ? "text-green-500" : "text-zinc-700"}>{selection.phone.length}/11</span>
-                                                    </label>
-                                                    <input required type="tel" placeholder="Ex: 83999999999" className="w-full bg-zinc-800/80 p-5 rounded-2xl border border-zinc-700/50 outline-none focus:border-amber-500 text-white placeholder:opacity-20" 
-                                                        value={selection.phone}
-                                                        onChange={handlePhoneInput} />
-                                                    {selection.phone.length > 0 && selection.phone.length < 10 && (
-                                                        <p className="text-[10px] text-amber-500/70 px-2 italic">Introduza um número válido (mín. 10 dígitos)</p>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            <div className="p-5 bg-amber-500/5 rounded-3xl border border-amber-500/10">
-                                                <p className="text-sm font-black text-amber-500 uppercase tracking-tight">{selection.service?.name}</p>
                                                 <p className="text-base text-zinc-300 font-medium italic">{selection.date} às {selection.time}</p>
+                                                <p className="text-amber-500 font-black text-lg">Total: R$ {totalSelection.toFixed(2).replace('.', ',')}</p>
                                             </div>
+
+                                            <div className="space-y-4">
+                                                <input required placeholder="Teu Nome" className="w-full bg-zinc-800/80 p-5 rounded-2xl border border-zinc-700/50 outline-none focus:border-amber-500 text-white" 
+                                                    value={selection.name} onChange={e => setSelection({...selection, name: e.target.value})} />
+                                                
+                                                <div className="space-y-1">
+                                                    <div className="flex justify-between px-2"><label className="text-[10px] font-black text-zinc-500 uppercase">WhatsApp</label></div>
+                                                    <input required type="tel" placeholder="DDD + Número" className="w-full bg-zinc-800/80 p-5 rounded-2xl border border-zinc-700/50 outline-none focus:border-amber-500 text-white" 
+                                                        value={selection.phone} onChange={handlePhoneInput} />
+                                                </div>
+                                            </div>
+
                                             <button type="submit" disabled={loading || selection.phone.length < 10 || !selection.name} className="w-full py-5 btn-primary rounded-3xl shadow-xl">
-                                                {loading ? 'A Gravar...' : 'Confirmar Reserva'}
+                                                {loading ? 'Processando...' : 'CONFIRMAR AGENDAMENTO'}
                                             </button>
                                         </form>
                                     )}
 
                                     {step === 5 && (
                                         <div className="text-center py-10 fade-in">
-                                            <Icon name="check-circle" size={64} className="text-green-500 mx-auto mb-6 shadow-lg" />
-                                            <h2 className="text-3xl font-black uppercase italic mb-8 tracking-tighter text-white">Marcado!</h2>
+                                            <Icon name="check-circle" size={64} className="text-green-500 mx-auto mb-6" />
+                                            <h2 className="text-3xl font-black uppercase italic mb-8 tracking-tighter text-white">Pronto!</h2>
                                             <button onClick={() => {
-                                                const msg = `Olá! Marquei um ${selection.service.name} na Don Barber para o dia ${selection.date} às ${selection.time}. Nome: ${selection.name}`;
+                                                const serviceList = selection.services.map(s => s.name).join(", ");
+                                                const msg = `Olá! Agendei na Don Barber:\n\n✂ Serviços: ${serviceList}\n📅 Data: ${selection.date}\n⏰ Hora: ${selection.time}\n💰 Total: R$ ${totalSelection.toFixed(2)}\n👤 Nome: ${selection.name}`;
                                                 window.open(`https://wa.me/${WHATSAPP_BARBEARIA}?text=${encodeURIComponent(msg)}`, '_blank');
-                                            }} className="w-full py-5 bg-[#25D366] text-white font-black rounded-3xl flex items-center justify-center gap-3 shadow-xl active:scale-95 transition-all">
-                                                <Icon name="message-circle" /> NOTIFICAR BARBEIRO
+                                            }} className="w-full py-5 bg-[#25D366] text-white font-black rounded-3xl flex items-center justify-center gap-3 shadow-xl">
+                                                <Icon name="message-circle" /> AVISAR NO WHATSAPP
                                             </button>
-                                            <button onClick={() => setStep(1)} className="mt-8 text-zinc-500 text-[10px] font-black uppercase tracking-widest hover:text-white transition-colors">Novo Agendamento</button>
+                                            <button onClick={() => window.location.reload()} className="mt-8 text-zinc-500 text-[10px] font-black uppercase tracking-widest">Novo Agendamento</button>
                                         </div>
                                     )}
                                 </div>
@@ -371,66 +394,58 @@
                         ) : (
                             /* PAINEL STAFF */
                             <div className="fade-in space-y-6">
-                                <div className="flex bg-zinc-800 p-1.5 rounded-2xl border border-zinc-700 mb-6 shadow-xl">
-                                    <button onClick={() => setAdminTab('agenda')} className={`flex-1 py-3 rounded-xl font-black text-[10px] uppercase transition-all ${adminTab === 'agenda' ? 'bg-amber-500 text-black shadow-lg' : 'text-zinc-500'}`}>Agenda</button>
-                                    <button onClick={() => setAdminTab('config')} className={`flex-1 py-3 rounded-xl font-black text-[10px] uppercase transition-all ${adminTab === 'config' ? 'bg-amber-500 text-black shadow-lg' : 'text-zinc-500'}`}>Serviços</button>
+                                <div className="flex bg-zinc-800 p-1.5 rounded-2xl border border-zinc-700 mb-6">
+                                    <button onClick={() => setAdminTab('agenda')} className={`flex-1 py-3 rounded-xl font-black text-[10px] uppercase ${adminTab === 'agenda' ? 'bg-amber-500 text-black shadow-lg' : 'text-zinc-500'}`}>Agenda</button>
+                                    <button onClick={() => setAdminTab('config')} className={`flex-1 py-3 rounded-xl font-black text-[10px] uppercase ${adminTab === 'config' ? 'bg-amber-500 text-black shadow-lg' : 'text-zinc-500'}`}>Serviços</button>
                                 </div>
 
                                 {adminTab === 'agenda' ? (
                                     <div className="space-y-4">
-                                        {bookings.length === 0 ? (
-                                            <p className="text-center py-20 text-zinc-600 font-bold italic uppercase tracking-widest opacity-30">Sem marcações</p>
-                                        ) : bookings.map(b => (
-                                            <div key={b.id} className="bg-zinc-900/80 p-5 rounded-[2rem] border border-zinc-800 flex items-center justify-between shadow-lg group hover:border-amber-500/30 transition-all">
-                                                <div className="flex items-center gap-4">
-                                                    <div className="w-12 h-12 bg-zinc-800 rounded-2xl flex items-center justify-center text-amber-500 font-black border border-zinc-700">{b.time?.split(':')[0]}</div>
-                                                    <div>
-                                                        <p className="font-bold text-white uppercase text-sm leading-none">{b.name}</p>
-                                                        <p className="text-[10px] text-zinc-500 font-bold uppercase mt-1 italic tracking-tighter">{b.service?.name} • {b.date}</p>
+                                        {bookings.length === 0 ? <p className="text-center py-20 opacity-30 italic">Sem agendamentos</p> : 
+                                            bookings.map(b => {
+                                                const serviceInfo = b.service || {};
+                                                const items = Array.isArray(serviceInfo.items) ? serviceInfo.items : [{name: 'Serviço Único'}];
+                                                return (
+                                                    <div key={b.id} className="bg-zinc-900/80 p-5 rounded-[2rem] border border-zinc-800 flex items-center justify-between shadow-lg">
+                                                        <div className="flex items-center gap-4">
+                                                            <div className="w-12 h-12 bg-zinc-800 rounded-2xl flex items-center justify-center text-amber-500 font-black border border-zinc-700">{b.time?.split(':')[0]}</div>
+                                                            <div>
+                                                                <p className="font-bold text-white uppercase text-sm leading-none">{b.name}</p>
+                                                                <div className="flex flex-wrap gap-1 mt-1">
+                                                                    {items.map((it, idx) => (
+                                                                        <span key={idx} className="text-[8px] text-zinc-500 font-bold uppercase">{it.name}{idx < items.length-1 ? ' •' : ''}</span>
+                                                                    ))}
+                                                                </div>
+                                                                <p className="text-[10px] text-amber-500/50 font-bold uppercase italic">{b.date}</p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex gap-2">
+                                                            <button onClick={() => deleteBooking(b.id)} className="p-3 bg-red-500/10 text-red-500 rounded-2xl"><Icon name="trash-2" size={18}/></button>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                                <div className="flex gap-2">
-                                                    <button onClick={() => {
-                                                        const msg = `Olá ${b.name}, confirmamos o seu horário na Don Barber!`;
-                                                        window.open(`https://wa.me/${b.phone}?text=${encodeURIComponent(msg)}`, '_blank');
-                                                    }} className="p-3 bg-green-500/10 text-green-500 rounded-2xl hover:bg-green-500 hover:text-white transition-all"><Icon name="message-circle" size={18}/></button>
-                                                    <button onClick={() => { if(confirm("Eliminar agendamento?")) deleteBooking(b.id) }} className="p-3 bg-red-500/10 text-red-500 rounded-2xl hover:bg-red-500 hover:text-white transition-all"><Icon name="trash-2" size={18}/></button>
-                                                </div>
-                                            </div>
-                                        ))}
+                                                );
+                                            })
+                                        }
                                     </div>
                                 ) : (
-                                    <div className="space-y-8 animate-in slide-in-from-bottom-4">
-                                        <div className="bg-zinc-900/80 p-6 rounded-[2.5rem] border border-amber-500/20 shadow-xl">
-                                            <h3 className="text-[10px] font-black text-amber-500 uppercase flex items-center gap-2 mb-4 italic tracking-widest">
-                                                <Icon name="users" size={14}/> Cadeiras Ativas
-                                            </h3>
-                                            <div className="flex items-center gap-6">
-                                                <input type="range" min="1" max="10" value={config.maxPerSlot} 
-                                                    onChange={(e) => updateCapacity(e.target.value)} className="flex-1 accent-amber-500 h-2 bg-zinc-800 rounded-lg appearance-none" />
-                                                <span className="text-3xl font-black text-white w-8 text-center">{config.maxPerSlot}</span>
+                                    <div className="space-y-6">
+                                        <div className="bg-zinc-900/80 p-6 rounded-[2.5rem] border border-zinc-800 space-y-3">
+                                            <h3 className="text-[10px] font-black text-zinc-500 uppercase px-2 italic tracking-widest">Novo Serviço</h3>
+                                            <input placeholder="Nome" className="w-full bg-zinc-800 p-4 rounded-2xl outline-none border border-zinc-700 text-white text-sm" value={newService.name} onChange={e => setNewService({...newService, name: e.target.value})} />
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <input placeholder="Preço (R$)" className="w-full bg-zinc-800 p-4 rounded-2xl outline-none border border-zinc-700 text-white text-sm" value={newService.price} onChange={e => setNewService({...newService, price: e.target.value})} />
+                                                <input placeholder="Tempo" className="w-full bg-zinc-800 p-4 rounded-2xl outline-none border border-zinc-700 text-white text-sm" value={newService.duration} onChange={e => setNewService({...newService, duration: e.target.value})} />
                                             </div>
+                                            <button onClick={addService} className="w-full py-4 bg-white text-black font-black rounded-2xl uppercase text-[10px] hover:bg-amber-500 transition-colors">Salvar Serviço</button>
                                         </div>
 
-                                        <div className="space-y-4">
-                                            <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest px-4 italic">Novo Serviço</h3>
-                                            <div className="bg-zinc-900/80 p-6 rounded-[2.5rem] border border-zinc-800 space-y-3 shadow-2xl">
-                                                <input placeholder="Ex: Corte Degradê" className="w-full bg-zinc-800 p-4 rounded-2xl outline-none border border-zinc-700 text-white text-sm focus:border-amber-500" value={newService.name} onChange={e => setNewService({...newService, name: e.target.value})} />
-                                                <div className="grid grid-cols-2 gap-3">
-                                                    <input placeholder="Preço (R$)" className="w-full bg-zinc-800 p-4 rounded-2xl outline-none border border-zinc-700 text-white text-sm focus:border-amber-500" value={newService.price} onChange={e => setNewService({...newService, price: e.target.value})} />
-                                                    <input placeholder="Duração" className="w-full bg-zinc-800 p-4 rounded-2xl outline-none border border-zinc-700 text-white text-sm focus:border-amber-500" value={newService.duration} onChange={e => setNewService({...newService, duration: e.target.value})} />
+                                        <div className="grid gap-2">
+                                            {services.map(s => (
+                                                <div key={s.id} className="bg-zinc-900/40 p-4 rounded-2xl border border-zinc-800 flex justify-between items-center px-6">
+                                                    <span className="font-bold text-sm italic">{s.name} ({s.price})</span>
+                                                    <button onClick={() => deleteService(s.id)} className="text-zinc-700 hover:text-red-500 p-2"><Icon name="trash-2" size={16}/></button>
                                                 </div>
-                                                <button onClick={addService} className="w-full py-4 bg-white text-black font-black rounded-2xl uppercase text-[10px] tracking-widest active:scale-95 transition-all hover:bg-amber-500">Adicionar Serviço</button>
-                                            </div>
-                                            
-                                            <div className="grid gap-2">
-                                                {services.map(s => (
-                                                    <div key={s.id} className="bg-zinc-900/40 p-4 rounded-2xl border border-zinc-800 flex justify-between items-center px-6">
-                                                        <span className="font-bold text-sm italic text-white">{s.name} ({s.price})</span>
-                                                        <button onClick={() => deleteService(s.id)} className="text-zinc-700 hover:text-red-500 transition-colors p-2"><Icon name="trash-2" size={16}/></button>
-                                                    </div>
-                                                ))}
-                                            </div>
+                                            ))}
                                         </div>
                                     </div>
                                 )}
@@ -440,16 +455,15 @@
 
                     <nav className="fixed bottom-0 left-0 right-0 bg-zinc-900/95 backdrop-blur-xl border-t border-white/5 px-10 py-5 z-50 rounded-t-[2.5rem] shadow-2xl max-w-[600px] mx-auto flex justify-between items-center">
                         <button onClick={() => {setView('user'); setStep(1)}} className={`flex flex-col items-center gap-1.5 transition-colors ${view === 'user' ? 'text-amber-500' : 'text-zinc-600'}`}>
-                            <Icon name="home" size={24} />
-                            <span className="text-[8px] font-black uppercase tracking-widest italic">Início</span>
+                            <Icon name="home" size={24} /><span className="text-[8px] font-black uppercase italic">Início</span>
                         </button>
                         <div className="w-px h-6 bg-zinc-800"></div>
                         <button onClick={() => setShowPinModal(true)} className={`flex flex-col items-center gap-1.5 transition-colors ${view === 'admin' ? 'text-amber-500' : 'text-zinc-600'}`}>
-                            <Icon name="lock" size={24} />
-                            <span className="text-[8px] font-black uppercase tracking-widest italic">Staff</span>
+                            <Icon name="lock" size={24} /><span className="text-[8px] font-black uppercase italic">Staff</span>
                         </button>
                     </nav>
 
+                    {/* PIN Modal */}
                     {showPinModal && (
                         <div className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center p-6 backdrop-blur-md">
                             <div className="w-full max-w-xs text-center space-y-8 animate-in fade-in zoom-in duration-300">
@@ -457,29 +471,16 @@
                                     <Icon name="lock" size={36} />
                                 </div>
                                 <div className="space-y-2">
-                                    <h3 className="text-2xl font-black uppercase italic text-white tracking-tighter leading-none">Acesso Staff</h3>
-                                    <p className="text-zinc-500 text-sm font-medium">Introduza o código da barbearia</p>
+                                    <h3 className="text-2xl font-black uppercase italic text-white tracking-tighter">Área Staff</h3>
+                                    <p className="text-zinc-500 text-sm">Insira o código de acesso</p>
                                 </div>
-                                <input 
-                                    type="password" 
-                                    inputMode="numeric"
-                                    maxLength={4}
-                                    autoFocus
-                                    placeholder="PIN"
-                                    className="w-full bg-zinc-900 border border-zinc-800 rounded-3xl py-6 text-center text-4xl font-black tracking-[0.4em] focus:border-amber-500 outline-none text-white shadow-2xl" 
-                                    value={pinInput}
-                                    onChange={e => {
-                                        const val = e.target.value;
-                                        setPinInput(val);
-                                        if (val === ADMIN_PIN) { 
-                                            setView('admin'); 
-                                            setShowPinModal(false); 
-                                            setPinInput(''); 
-                                            fetchData();
-                                        }
+                                <input type="password" inputMode="numeric" maxLength={4} autoFocus className="w-full bg-zinc-900 border border-zinc-800 rounded-3xl py-6 text-center text-4xl font-black tracking-[0.4em] outline-none text-white focus:border-amber-500" 
+                                    value={pinInput} onChange={e => {
+                                        setPinInput(e.target.value);
+                                        if (e.target.value === ADMIN_PIN) { setView('admin'); setShowPinModal(false); setPinInput(''); fetchData(); }
                                     }} 
                                 />
-                                <button onClick={() => {setShowPinModal(false); setPinInput('')}} className="text-zinc-600 font-bold uppercase text-[10px] tracking-widest italic hover:text-white transition-colors">Cancelar</button>
+                                <button onClick={() => setShowPinModal(false)} className="text-zinc-600 font-bold uppercase text-[10px]">Cancelar</button>
                             </div>
                         </div>
                     )}
