@@ -73,7 +73,8 @@
         const { createClient } = supabase;
         const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-        const WHATSAPP_BARBEARIA = "5583886190083"; 
+        // --- NÚMERO ATUALIZADO ---
+        const WHATSAPP_BARBEARIA = "5583996190083"; 
         const ADMIN_PIN = "1234";
 
         // Wrapper para ícones Lucide
@@ -126,8 +127,13 @@
                     if (resSettings.data) setConfig(resSettings.data);
                 } catch (err) {
                     console.error("Erro na comunicação:", err);
-                    setError("Erro ao ligar ao servidor.");
-                    setErrorDetail(err.message || "Verifique se executou o script SQL no Supabase.");
+                    if (err.message === 'Failed to fetch' || err.name === 'TypeError') {
+                        setError("Ligação ao banco de dados bloqueada pelo navegador.");
+                        setErrorDetail("Por favor, desative AdBlockers ou o Brave Shields para este site.");
+                    } else {
+                        setError("Erro ao ligar ao servidor.");
+                        setErrorDetail(err.message || "Verifique as configurações do Supabase.");
+                    }
                 } finally {
                     setInitialLoading(false);
                 }
@@ -203,7 +209,6 @@
             return (
                 <div className="min-h-screen flex flex-col pb-24 max-w-[600px] mx-auto bg-zinc-950 border-x border-white/5 shadow-2xl relative">
                     
-                    {/* Header Principal */}
                     <header className="px-6 pt-8 pb-4 bg-zinc-900/50 sticky top-0 z-40 backdrop-blur-md border-b border-white/5">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
@@ -226,17 +231,16 @@
                     </header>
 
                     <main className="flex-1 px-4 py-6">
-                        {/* Alerta de Erro */}
                         {error && (
                             <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex flex-col gap-2 text-red-400 text-xs fade-in">
                                 <div className="flex items-center justify-between w-full">
                                     <div className="flex items-center gap-2 font-bold uppercase tracking-tighter">
-                                        <Icon name="alert-triangle" size={14} /> {error}
+                                        <Icon name="alert-triangle" size={14} /> Problema Técnico
                                     </div>
                                     <button onClick={() => setError(null)}><Icon name="x" size={14}/></button>
                                 </div>
                                 {errorDetail && <p className="opacity-60 font-mono bg-black/20 p-2 rounded">{errorDetail}</p>}
-                                <button onClick={fetchData} className="underline self-start font-bold">Tentar ligar novamente</button>
+                                <button onClick={fetchData} className="underline self-start font-bold">Tentar Reconectar</button>
                             </div>
                         )}
 
@@ -244,7 +248,6 @@
                             <div className="fade-in">
                                 <div className="bg-zinc-900/40 rounded-[2.5rem] border border-zinc-800/50 p-6 shadow-2xl backdrop-blur-sm">
                                     
-                                    {/* Passo 1: Serviços */}
                                     {step === 1 && (
                                         <div className="space-y-4">
                                             <h2 className="text-xl font-black italic uppercase px-2 flex justify-between items-center">
@@ -264,16 +267,18 @@
                                                         <span className="font-black text-amber-500 text-lg">{s.price}</span>
                                                     </button>
                                                 )) : !initialLoading && (
-                                                    <div className="text-center py-12 opacity-30 italic text-sm">Nenhum serviço disponível.</div>
+                                                    <div className="text-center py-12 opacity-30 italic text-sm leading-relaxed">
+                                                        Nenhum serviço disponível.<br/>
+                                                        <span className="text-[10px] uppercase font-black block mt-1 tracking-widest text-amber-500/50">Configure no Painel Staff</span>
+                                                    </div>
                                                 )}
                                             </div>
                                         </div>
                                     )}
 
-                                    {/* Passo 2: Data */}
                                     {step === 2 && (
                                         <div className="space-y-6 fade-in">
-                                            <h2 className="text-xl font-black italic uppercase">Para quando?</h2>
+                                            <h2 className="text-xl font-black italic uppercase">Qual o dia?</h2>
                                             <div className="bg-zinc-800/50 p-4 rounded-3xl border border-zinc-700/50">
                                                 <input type="date" min={new Date().toISOString().split('T')[0]} 
                                                     className="w-full bg-transparent p-4 text-white text-lg font-bold outline-none [color-scheme:dark]" 
@@ -286,7 +291,6 @@
                                         </div>
                                     )}
 
-                                    {/* Passo 3: Horário */}
                                     {step === 3 && (
                                         <div className="space-y-6 fade-in">
                                             <h2 className="text-xl font-black text-center italic uppercase">Horários Disponíveis</h2>
@@ -307,44 +311,36 @@
                                         </div>
                                     )}
 
-                                    {/* Passo 4: Dados Finais */}
                                     {step === 4 && (
                                         <form onSubmit={handleBooking} className="space-y-6 fade-in">
-                                            <h2 className="text-xl font-black italic uppercase">Teus Dados</h2>
+                                            <h2 className="text-xl font-black italic uppercase">Finalizar Reserva</h2>
                                             <div className="space-y-4">
-                                                <div className="space-y-1">
-                                                    <label className="text-[10px] font-black text-zinc-500 uppercase px-2 tracking-widest">Nome Completo</label>
-                                                    <input required placeholder="Como te chamas?" className="w-full bg-zinc-800/80 p-5 rounded-2xl border border-zinc-700/50 outline-none focus:border-amber-500 text-white" 
-                                                        onChange={e => setSelection({...selection, name: e.target.value})} />
-                                                </div>
-                                                <div className="space-y-1">
-                                                    <label className="text-[10px] font-black text-zinc-500 uppercase px-2 tracking-widest">Teu WhatsApp</label>
-                                                    <input required type="tel" placeholder="Teu contacto" className="w-full bg-zinc-800/80 p-5 rounded-2xl border border-zinc-700/50 outline-none focus:border-amber-500 text-white" 
-                                                        onChange={e => setSelection({...selection, phone: e.target.value})} />
-                                                </div>
+                                                <input required placeholder="Seu Nome Completo" className="w-full bg-zinc-800/80 p-5 rounded-2xl border border-zinc-700/50 outline-none focus:border-amber-500 text-white" 
+                                                    onChange={e => setSelection({...selection, name: e.target.value})} />
+                                                <input required type="tel" placeholder="Seu WhatsApp (DDD)" className="w-full bg-zinc-800/80 p-5 rounded-2xl border border-zinc-700/50 outline-none focus:border-amber-500 text-white" 
+                                                    onChange={e => setSelection({...selection, phone: e.target.value})} />
                                             </div>
                                             <div className="p-5 bg-amber-500/5 rounded-3xl border border-amber-500/10">
                                                 <p className="text-sm font-black text-amber-500 uppercase tracking-tight">{selection.service?.name}</p>
                                                 <p className="text-base text-zinc-300 font-medium italic">{selection.date} às {selection.time}</p>
                                             </div>
                                             <button type="submit" disabled={loading} className="w-full py-5 btn-primary rounded-3xl shadow-xl">
-                                                {loading ? 'A Confirmar...' : 'Finalizar Agendamento'}
+                                                {loading ? 'A Gravar...' : 'Confirmar'}
                                             </button>
                                         </form>
                                     )}
 
-                                    {/* Passo 5: Sucesso */}
                                     {step === 5 && (
                                         <div className="text-center py-10 fade-in">
-                                            <Icon name="check-circle" size={64} className="text-green-500 mx-auto mb-6" />
-                                            <h2 className="text-3xl font-black uppercase italic mb-8 tracking-tighter">Confirmado!</h2>
+                                            <Icon name="check-circle" size={64} className="text-green-500 mx-auto mb-6 shadow-lg" />
+                                            <h2 className="text-3xl font-black uppercase italic mb-8 tracking-tighter text-white">Marcado!</h2>
                                             <button onClick={() => {
-                                                const msg = `Olá! Marquei um ${selection.service.name} na Don Barber para o dia ${selection.date} às ${selection.time}. Nome: ${selection.name}`;
+                                                const msg = `Olá! Agendei um ${selection.service.name} na Don Barber para o dia ${selection.date} às ${selection.time}. Nome: ${selection.name}`;
                                                 window.open(`https://wa.me/${WHATSAPP_BARBEARIA}?text=${encodeURIComponent(msg)}`, '_blank');
                                             }} className="w-full py-5 bg-[#25D366] text-white font-black rounded-3xl flex items-center justify-center gap-3 shadow-xl active:scale-95 transition-all">
-                                                <Icon name="message-circle" /> AVISAR NO WHATSAPP
+                                                <Icon name="message-circle" /> NOTIFICAR BARBEIRO
                                             </button>
-                                            <button onClick={() => setStep(1)} className="mt-8 text-zinc-500 text-[10px] font-black uppercase tracking-widest hover:text-white transition-colors">Fazer Novo Agendamento</button>
+                                            <button onClick={() => setStep(1)} className="mt-8 text-zinc-500 text-[10px] font-black uppercase tracking-widest hover:text-white transition-colors">Novo Agendamento</button>
                                         </div>
                                     )}
                                 </div>
@@ -353,14 +349,14 @@
                             /* PAINEL STAFF */
                             <div className="fade-in space-y-6">
                                 <div className="flex bg-zinc-800 p-1.5 rounded-2xl border border-zinc-700 mb-6 shadow-xl">
-                                    <button onClick={() => setAdminTab('agenda')} className={`flex-1 py-3 rounded-xl font-black text-[10px] uppercase transition-all ${adminTab === 'agenda' ? 'bg-amber-500 text-black shadow-lg' : 'text-zinc-500'}`}>Agenda</button>
-                                    <button onClick={() => setAdminTab('config')} className={`flex-1 py-3 rounded-xl font-black text-[10px] uppercase transition-all ${adminTab === 'config' ? 'bg-amber-500 text-black shadow-lg' : 'text-zinc-500'}`}>Gestão</button>
+                                    <button onClick={() => setAdminTab('agenda')} className={`flex-1 py-3 rounded-xl font-black text-[10px] uppercase transition-all ${adminTab === 'agenda' ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/20' : 'text-zinc-500'}`}>Agenda</button>
+                                    <button onClick={() => setAdminTab('config')} className={`flex-1 py-3 rounded-xl font-black text-[10px] uppercase transition-all ${adminTab === 'config' ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/20' : 'text-zinc-500'}`}>Gestão</button>
                                 </div>
 
                                 {adminTab === 'agenda' ? (
                                     <div className="space-y-4">
                                         {bookings.length === 0 ? (
-                                            <p className="text-center py-20 text-zinc-600 font-bold italic uppercase tracking-widest opacity-30">Sem marcações registadas</p>
+                                            <p className="text-center py-20 text-zinc-600 font-bold italic uppercase tracking-widest opacity-30">Sem agendamentos</p>
                                         ) : bookings.map(b => (
                                             <div key={b.id} className="bg-zinc-900/80 p-5 rounded-[2rem] border border-zinc-800 flex items-center justify-between shadow-lg group hover:border-amber-500/30 transition-all">
                                                 <div className="flex items-center gap-4">
@@ -375,17 +371,16 @@
                                                         const msg = `Olá ${b.name}, confirmamos o seu horário na Don Barber!`;
                                                         window.open(`https://wa.me/${b.phone}?text=${encodeURIComponent(msg)}`, '_blank');
                                                     }} className="p-3 bg-green-500/10 text-green-500 rounded-2xl hover:bg-green-500 hover:text-white transition-all"><Icon name="message-circle" size={18}/></button>
-                                                    <button onClick={() => { if(confirm("Remover agendamento?")) deleteBooking(b.id) }} className="p-3 bg-red-500/10 text-red-500 rounded-2xl hover:bg-red-500 hover:text-white transition-all"><Icon name="trash-2" size={18}/></button>
+                                                    <button onClick={() => { if(confirm("Eliminar agendamento?")) deleteBooking(b.id) }} className="p-3 bg-red-500/10 text-red-500 rounded-2xl hover:bg-red-500 hover:text-white transition-all"><Icon name="trash-2" size={18}/></button>
                                                 </div>
                                             </div>
                                         ))}
                                     </div>
                                 ) : (
                                     <div className="space-y-8 animate-in slide-in-from-bottom-4">
-                                        {/* Gestão de Capacidade */}
                                         <div className="bg-zinc-900/80 p-6 rounded-[2.5rem] border border-amber-500/20 shadow-xl">
                                             <h3 className="text-[10px] font-black text-amber-500 uppercase flex items-center gap-2 mb-4 italic tracking-widest">
-                                                <Icon name="users" size={14}/> Barbeiros em Simultâneo
+                                                <Icon name="users" size={14}/> Cadeiras Ativas
                                             </h3>
                                             <div className="flex items-center gap-6">
                                                 <input type="range" min="1" max="10" value={config.maxPerSlot} 
@@ -394,16 +389,15 @@
                                             </div>
                                         </div>
 
-                                        {/* Gestão de Serviços */}
                                         <div className="space-y-4">
-                                            <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest px-4 italic">Novo Serviço no Catálogo</h3>
+                                            <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest px-4 italic">Novo Serviço</h3>
                                             <div className="bg-zinc-900/80 p-6 rounded-[2.5rem] border border-zinc-800 space-y-3 shadow-2xl">
                                                 <input placeholder="Ex: Corte Degradê" className="w-full bg-zinc-800 p-4 rounded-2xl outline-none border border-zinc-700 text-white text-sm focus:border-amber-500" value={newService.name} onChange={e => setNewService({...newService, name: e.target.value})} />
                                                 <div className="flex gap-2">
-                                                    <input placeholder="Preço (Ex: 15€)" className="flex-1 bg-zinc-800 p-4 rounded-2xl outline-none border border-zinc-700 text-white text-sm focus:border-amber-500" value={newService.price} onChange={e => setNewService({...newService, price: e.target.value})} />
-                                                    <input placeholder="Tempo (Ex: 45min)" className="flex-1 bg-zinc-800 p-4 rounded-2xl outline-none border border-zinc-700 text-white text-sm focus:border-amber-500" value={newService.duration} onChange={e => setNewService({...newService, duration: e.target.value})} />
+                                                    <input placeholder="Preço (R$)" className="flex-1 bg-zinc-800 p-4 rounded-2xl outline-none border border-zinc-700 text-white text-sm focus:border-amber-500" value={newService.price} onChange={e => setNewService({...newService, price: e.target.value})} />
+                                                    <input placeholder="Duração" className="flex-1 bg-zinc-800 p-4 rounded-2xl outline-none border border-zinc-700 text-white text-sm focus:border-amber-500" value={newService.duration} onChange={e => setNewService({...newService, duration: e.target.value})} />
                                                 </div>
-                                                <button onClick={addService} className="w-full py-4 bg-white text-black font-black rounded-2xl uppercase text-[10px] tracking-widest active:scale-95 transition-all hover:bg-amber-500">Adicionar Serviço</button>
+                                                <button onClick={addService} className="w-full py-4 bg-white text-black font-black rounded-2xl uppercase text-[10px] tracking-widest active:scale-95 transition-all hover:bg-amber-500">Salvar Serviço</button>
                                             </div>
                                             
                                             <div className="grid gap-2">
@@ -421,7 +415,6 @@
                         )}
                     </main>
 
-                    {/* Navbar Inferior Estilo App */}
                     <nav className="fixed bottom-0 left-0 right-0 bg-zinc-900/95 backdrop-blur-xl border-t border-white/5 px-10 py-5 z-50 rounded-t-[2.5rem] shadow-2xl max-w-[600px] mx-auto flex justify-between items-center">
                         <button onClick={() => {setView('user'); setStep(1)}} className={`flex flex-col items-center gap-1.5 transition-colors ${view === 'user' ? 'text-amber-500' : 'text-zinc-600'}`}>
                             <Icon name="home" size={24} />
@@ -434,7 +427,6 @@
                         </button>
                     </nav>
 
-                    {/* Modal de PIN da Área Staff */}
                     {showPinModal && (
                         <div className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center p-6 backdrop-blur-md">
                             <div className="w-full max-w-xs text-center space-y-8 animate-in fade-in zoom-in duration-300">
