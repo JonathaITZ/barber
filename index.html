@@ -3,105 +3,108 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Don Barber - Agendamento Premium</title>
+    <title>Don Barber - Premium Grooming</title>
     
-    <!-- Tailwind CSS para Estilização -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- React e Babel -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    
-    <!-- Supabase JS Library -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    
-    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
 
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&family=Roboto+Slab:wght@700;900&display=swap');
         
+        :root {
+            --brand-navy: #0f172a;
+            --transition-speed: 0.6s;
+            --ease: cubic-bezier(0.23, 1, 0.32, 1);
+        }
+
         body { 
             font-family: 'Inter', sans-serif; 
             -webkit-tap-highlight-color: transparent;
-            background-color: #09090b;
+            overflow-x: hidden;
+            transition: background-color 0.5s var(--ease), color 0.5s var(--ease);
         }
 
+        .font-logo { font-family: 'Roboto Slab', serif; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         
+        /* Slider Horizontal de Passos */
+        .step-container {
+            display: flex;
+            transition: transform var(--transition-speed) var(--ease);
+            width: 500%; 
+        }
+
+        .step-item {
+            width: 20%;
+            flex-shrink: 0;
+            padding: 0 16px;
+            height: 100%;
+        }
+
+        /* Efeitos de Feedback */
+        .press-effect {
+            transition: transform 0.2s var(--ease);
+        }
+        .press-effect:active {
+            transform: scale(0.97);
+        }
+
+        .theme-icon-swap {
+            animation: iconRotate 0.5s var(--ease) forwards;
+        }
+
+        @keyframes iconRotate {
+            0% { transform: rotate(-90deg) scale(0); opacity: 0; }
+            100% { transform: rotate(0deg) scale(1); opacity: 1; }
+        }
+
+        /* Estilos Glassmorphism */
+        .glass-dark {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .glass-light {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(15, 23, 42, 0.05);
+            box-shadow: 0 10px 30px -10px rgba(15, 23, 42, 0.1);
+        }
+
         input[type="date"]::-webkit-calendar-picker-indicator,
-        input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(1); }
-        
-        .fade-in { animation: fadeIn 0.4s ease-out; }
-        @keyframes fadeIn { 
-            from { opacity: 0; transform: translateY(10px); } 
-            to { opacity: 1; transform: translateY(0); } 
+        input[type="time"]::-webkit-calendar-picker-indicator { 
+            filter: var(--calendar-filter); 
         }
 
-        .btn-primary {
-            background-color: #f59e0b;
-            color: #000;
-            font-weight: 900;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            transition: all 0.2s;
-        }
-        .btn-primary:active { transform: scale(0.95); }
-        .btn-primary:disabled { 
-            background-color: #3f3f46;
-            color: #71717a;
-            transform: scale(1);
-            cursor: not-allowed;
-        }
-
-        .service-card-selected {
-            border-color: #f59e0b !important;
-            background-color: rgba(245, 158, 11, 0.1) !important;
-        }
-
-        /* Toggle Switch Customizado */
-        .switch {
-            position: relative;
-            display: inline-block;
-            width: 50px;
-            height: 26px;
-        }
+        /* Toggle Switch Estilizado */
+        .switch { position: relative; display: inline-block; width: 44px; height: 22px; }
         .switch input { opacity: 0; width: 0; height: 0; }
-        .slider {
-            position: absolute;
-            cursor: pointer;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background-color: #27272a;
-            transition: .4s;
-            border-radius: 34px;
+        .slider-toggle {
+            position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #cbd5e1; transition: .4s; border-radius: 34px;
         }
-        .slider:before {
-            position: absolute;
-            content: "";
-            height: 18px; width: 18px;
-            left: 4px; bottom: 4px;
-            background-color: white;
-            transition: .4s;
-            border-radius: 50%;
+        .slider-toggle:before {
+            position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px;
+            background-color: white; transition: .4s; border-radius: 50%;
         }
-        input:checked + .slider { background-color: #f59e0b; }
-        input:checked + .slider:before { transform: translateX(24px); }
+        input:checked + .slider-toggle { background-color: #0f172a; }
+        input:checked + .slider-toggle:before { transform: translateX(22px); }
     </style>
 </head>
-<body class="text-zinc-100">
+<body class="bg-slate-50 text-slate-900">
     <div id="root"></div>
 
     <script type="text/babel" data-type="module">
         const { useState, useEffect, useRef, useCallback, useMemo } = React;
 
-        // --- CONFIGURAÇÃO SUPABASE ---
         const SUPABASE_URL = "https://qokhszjgkzcsauvkdlia.supabase.co";
         const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFva2hzempna3pjc2F1dmtkbGlhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE1ODM4MDgsImV4cCI6MjA4NzE1OTgwOH0.IfqVxnwux81PXVAqhDe7ftRXePHM4cmg3w6VHTN53n8";
         
-        const { createClient } = supabase;
-        const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
+        const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         const ADMIN_PIN = "1234";
 
         const Icon = ({ name, size = 20, className = "" }) => {
@@ -117,8 +120,9 @@
 
         function App() {
             const [view, setView] = useState('user'); 
-            const [adminTab, setAdminTab] = useState('agenda'); 
             const [step, setStep] = useState(1);
+            const [adminTab, setAdminTab] = useState('agenda');
+            const [isDarkMode, setIsDarkMode] = useState(false);
             
             const [bookings, setBookings] = useState([]);
             const [services, setServices] = useState([]);
@@ -126,8 +130,8 @@
                 maxPerSlot: 2, 
                 openTime: '09:00', 
                 closeTime: '19:00', 
-                isManualClosed: false,
-                whatsapp: ''
+                isManualClosed: false, 
+                whatsapp: '' 
             });
             
             const [pinInput, setPinInput] = useState('');
@@ -142,103 +146,70 @@
                 try {
                     const [resBookings, resServices, resSettings] = await Promise.all([
                         client.from('bookings').select('*').order('date', { ascending: true }),
-                        client.from('services').select('*'),
+                        client.from('services').select('*').order('name', { ascending: true }),
                         client.from('settings').select('*').eq('id', 'global').maybeSingle()
                     ]);
-
                     setBookings(resBookings.data || []);
                     setServices(resServices.data || []);
                     if (resSettings.data) setConfig(resSettings.data);
-                } catch (err) {
-                    setError("Erro ao carregar dados do servidor.");
-                }
+                } catch (err) { console.error(err); }
             }, []);
 
             useEffect(() => {
                 fetchData();
-                
-                // Realtime Subscriptions
-                const channel = client.channel('db-all-changes')
+                const channel = client.channel('db-updates')
                     .on('postgres_changes', { event: '*', schema: 'public' }, fetchData)
                     .subscribe();
-
                 return () => client.removeChannel(channel);
             }, [fetchData]);
 
-            // Lógica de Geração de Horários
+            useEffect(() => {
+                document.body.style.backgroundColor = isDarkMode ? "#020617" : "#f8fafc";
+                document.body.style.color = isDarkMode ? "#f1f5f9" : "#0f172a";
+                document.documentElement.style.setProperty('--calendar-filter', isDarkMode ? 'invert(1)' : 'invert(0)');
+            }, [isDarkMode]);
+
             const timeSlots = useMemo(() => {
                 const slots = [];
-                const start = parseInt((config.openTime || '09:00').split(':')[0]);
-                const end = parseInt((config.closeTime || '19:00').split(':')[0]);
+                const startHour = parseInt((config.openTime || '09:00').split(':')[0]);
+                const endHour = parseInt((config.closeTime || '19:00').split(':')[0]);
                 
-                for (let i = start; i < end; i++) {
+                for (let i = startHour; i < endHour; i++) {
                     slots.push(`${i.toString().padStart(2, '0')}:00`);
                 }
                 return slots;
             }, [config.openTime, config.closeTime]);
 
+            const formatPrice = (price) => {
+                if (!price) return "R$ 0,00";
+                const clean = price.toString().replace('R$', '').trim();
+                return `R$ ${clean}`;
+            };
+
             const getVagasDisponiveis = (date, time) => {
                 const ocupados = bookings.filter(b => b.date === date && b.time === time).length;
-                const totalCadeiras = Number(config.maxPerSlot) || 2;
-                return totalCadeiras - ocupados;
+                return (Number(config.maxPerSlot) || 2) - ocupados;
             };
 
-            const toggleService = (s) => {
-                setSelection(prev => {
-                    const exists = prev.services.find(item => item.id === s.id);
-                    if (exists) {
-                        return { ...prev, services: prev.services.filter(item => item.id !== s.id) };
-                    } else {
-                        return { ...prev, services: [...prev.services, s] };
-                    }
-                });
-            };
-
-            const totalSelection = useMemo(() => {
+            const totalValue = useMemo(() => {
                 return selection.services.reduce((acc, s) => {
-                    const price = parseFloat(s.price.replace(/[^\d,.]/g, '').replace(',', '.'));
-                    return acc + (isNaN(price) ? 0 : price);
+                    const val = parseFloat(s.price.toString().replace(/[^\d,.]/g, '').replace(',', '.') || 0);
+                    return acc + val;
                 }, 0);
             }, [selection.services]);
 
-            // Lógica Central de Redirecionamento WhatsApp
-            const handleWhatsAppRedirect = () => {
-                // Limpar o número cadastrado de qualquer caractere não numérico
-                const rawNumber = config.whatsapp.replace(/\D/g, '');
-                
-                // Se o número começar com 55, usamos como está, senão adicionamos o prefixo
-                const finalNumber = rawNumber.startsWith('55') ? rawNumber : `55${rawNumber}`;
-                
-                const servicesText = selection.services.map(s => s.name).join(", ");
-                const msg = `Olá! Fiz um agendamento na Don Barber:\n\n✂ Serviços: ${servicesText}\n📅 Data: ${selection.date}\n⏰ Hora: ${selection.time}\n👤 Nome: ${selection.name}\n💰 Total: R$ ${totalSelection.toFixed(2)}`;
-                
-                window.open(`https://wa.me/${finalNumber}?text=${encodeURIComponent(msg)}`, '_blank');
-            };
-
-            const handleBookingSubmit = async (e) => {
+            const handleBooking = async (e) => {
                 e.preventDefault();
                 setLoading(true);
                 try {
-                    const serviceSummary = {
-                        items: selection.services.map(s => ({ name: s.name, price: s.price })),
-                        total: totalSelection
-                    };
-
                     const { error } = await client.from('bookings').insert([{
-                        name: selection.name,
-                        phone: selection.phone,
-                        date: selection.date,
-                        time: selection.time,
-                        service: serviceSummary
+                        name: selection.name, phone: selection.phone, date: selection.date, time: selection.time,
+                        service: { items: selection.services.map(s => ({ name: s.name, price: s.price })), total: totalValue }
                     }]);
-
                     if (error) throw error;
                     setStep(5);
-                } catch (err) {
-                    setError("Erro ao salvar agendamento.");
-                } finally {
-                    setLoading(false);
-                }
+                } catch (err) { setError("Erro ao processar reserva."); }
+                finally { setLoading(false); }
             };
 
             const updateSettings = async (updates) => {
@@ -252,184 +223,243 @@
                 fetchData();
             };
 
+            const sendWhatsApp = () => {
+                const clean = (config.whatsapp || '').replace(/\D/g, '');
+                const final = clean.startsWith('55') ? clean : `55${clean}`;
+                const list = selection.services.map(s => s.name).join(", ");
+                const msg = `Agendamento Don Barber:\n\n✂ ${list}\n📅 ${selection.date}\n⏰ ${selection.time}\n👤 ${selection.name}\n💰 Total: R$ ${totalValue.toFixed(2)}`;
+                window.open(`https://wa.me/${final}?text=${encodeURIComponent(msg)}`, '_blank');
+            };
+
+            const glassClass = isDarkMode ? "glass-dark" : "glass-light";
+            const textContrast = isDarkMode ? "text-white" : "text-slate-950";
+            const subTextContrast = isDarkMode ? "text-slate-400" : "text-slate-500";
+            const accentBtn = isDarkMode ? "bg-white text-slate-950" : "bg-slate-900 text-white";
+
             return (
-                <div className="min-h-screen flex flex-col pb-24 max-w-[600px] mx-auto bg-zinc-950 border-x border-white/5 shadow-2xl relative">
+                <div className="min-h-screen max-w-[500px] mx-auto flex flex-col relative overflow-hidden transition-all duration-500 border-x border-slate-200 dark:border-white/5 shadow-2xl">
                     
-                    <header className="px-6 pt-8 pb-4 bg-zinc-900/50 sticky top-0 z-40 backdrop-blur-md border-b border-white/5">
+                    {/* Cabeçalho */}
+                    <header className={`p-6 backdrop-blur-xl border-b z-50 sticky top-0 transition-all duration-500 ${isDarkMode ? 'bg-slate-900/40 border-white/5' : 'bg-white/60 border-slate-200'}`}>
                         <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <div className="p-2.5 bg-amber-500 rounded-xl text-black shadow-lg shadow-amber-500/20">
-                                    <Icon name="scissors" size={24} />
+                            <div className="flex items-center gap-4">
+                                <div className="relative">
+                                    <div className="w-12 h-12 rounded-full border-2 border-slate-900 dark:border-white bg-white p-1 shadow-sm overflow-hidden flex items-center justify-center">
+                                        <Icon name="scissors" size={24} className="text-slate-900" />
+                                    </div>
+                                    <div className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-white dark:border-slate-900 ${config.isManualClosed ? 'bg-red-500' : 'bg-green-500'}`}></div>
                                 </div>
                                 <div>
-                                    <h1 className="text-xl font-black italic uppercase tracking-tighter leading-none text-white">Don <span className="text-amber-500">Barber</span></h1>
-                                    <span className="text-[10px] font-bold text-amber-500/50 tracking-widest uppercase block mt-1">
-                                        {view === 'user' ? 'Reserva Online' : 'Controlo Staff'}
-                                    </span>
+                                    <h1 className={`text-xl font-logo uppercase tracking-tighter leading-none ${textContrast}`}>Don <span className="opacity-40">Barber</span></h1>
+                                    <p className={`text-[9px] font-bold uppercase tracking-[0.2em] mt-1.5 ${subTextContrast}`}>
+                                        {config.isManualClosed ? 'Loja Fechada' : 'Navy Standard'}
+                                    </p>
                                 </div>
                             </div>
-                            {view === 'admin' && (
-                                <button onClick={() => setView('user')} className="p-2 bg-zinc-800 rounded-full text-zinc-400 hover:text-white transition-all">
-                                    <Icon name="log-out" size={18} />
-                                </button>
-                            )}
+
+                            <button 
+                                onClick={() => setIsDarkMode(!isDarkMode)}
+                                className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-all press-effect border ${isDarkMode ? 'bg-slate-800 border-white/10 text-white' : 'bg-white border-slate-200 text-slate-900 shadow-sm'}`}
+                            >
+                                <div key={isDarkMode ? 'sun' : 'moon'} className="theme-icon-swap">
+                                    <Icon name={isDarkMode ? "sun" : "moon"} size={20} />
+                                </div>
+                            </button>
                         </div>
                     </header>
 
-                    <main className="flex-1 px-4 py-6">
-                        {error && (
-                            <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-400 text-xs fade-in flex justify-between items-center">
-                                <span>{error}</span>
-                                <button onClick={() => setError(null)}><Icon name="x" size={14}/></button>
+                    <main className="flex-1 flex flex-col overflow-hidden">
+                        {config.isManualClosed && view === 'user' ? (
+                            /* Ecrã de Loja Fechada */
+                            <div className="flex-1 flex flex-col items-center justify-center p-10 text-center animate-in zoom-in">
+                                <div className="w-24 h-24 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mb-6 shadow-xl border-2 border-red-500/20">
+                                    <Icon name="power-off" size={40} />
+                                </div>
+                                <h2 className={`text-3xl font-logo uppercase italic mb-4 leading-none ${textContrast}`}>Estamos em Pausa</h2>
+                                <p className={`${subTextContrast} text-sm font-medium leading-relaxed italic`}>
+                                    De momento não estamos a aceitar agendamentos online. Por favor, tente novamente mais tarde ou contacte-nos.
+                                </p>
+                                <button onClick={() => window.open(`https://wa.me/${config.whatsapp}`)} className="mt-10 px-8 py-4 bg-green-500 text-white font-logo rounded-2xl uppercase text-[10px] tracking-widest flex items-center gap-3">
+                                    <Icon name="message-circle" /> Contactar Suporte
+                                </button>
                             </div>
-                        )}
-
-                        {view === 'user' ? (
-                            <div className="fade-in">
-                                <div className="bg-zinc-900/40 rounded-[2.5rem] border border-zinc-800/50 p-6 shadow-2xl backdrop-blur-sm">
+                        ) : view === 'user' ? (
+                            <div className="flex-1 overflow-hidden">
+                                <div className="step-container h-full" style={{ transform: `translateX(-${(step - 1) * 20}%)` }}>
                                     
-                                    {config.isManualClosed ? (
-                                        <div className="text-center py-20 animate-in zoom-in">
-                                            <Icon name="door-closed" size={64} className="text-red-500 mx-auto mb-6" />
-                                            <h2 className="text-2xl font-black uppercase italic text-white mb-2 tracking-tighter">Estamos Fechados</h2>
-                                            <p className="text-zinc-500 text-sm max-w-[200px] mx-auto">De momento a loja está fechada. Tente novamente mais tarde!</p>
-                                        </div>
-                                    ) : (
-                                        <>
-                                            {/* Passo 1: Serviços */}
-                                            {step === 1 && (
-                                                <div className="space-y-4">
-                                                    <h2 className="text-xl font-black italic uppercase text-white px-2 tracking-tighter">O que vamos fazer?</h2>
-                                                    <div className="grid gap-3">
-                                                        {services.map(s => {
-                                                            const isSelected = selection.services.find(item => item.id === s.id);
-                                                            return (
-                                                                <button key={s.id} onClick={() => toggleService(s)} 
-                                                                    className={`w-full flex items-center justify-between p-5 rounded-3xl border transition-all text-left ${isSelected ? 'service-card-selected' : 'bg-zinc-800/40 border-zinc-700/50'}`}>
-                                                                    <div className="flex items-center gap-4">
-                                                                        <div className={`p-3 rounded-2xl transition-colors ${isSelected ? 'bg-amber-500 text-black' : 'bg-zinc-700/50 text-amber-500'}`}>
-                                                                            <Icon name={isSelected ? "check" : "plus"} />
-                                                                        </div>
-                                                                        <div>
-                                                                            <p className="font-bold text-base leading-tight text-white">{s.name}</p>
-                                                                            <p className="text-xs text-zinc-500">{s.duration}</p>
-                                                                        </div>
-                                                                    </div>
-                                                                    <span className="font-black text-amber-500">{s.price}</span>
-                                                                </button>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                    {selection.services.length > 0 && (
-                                                        <button onClick={() => setStep(2)} className="w-full py-5 btn-primary rounded-3xl mt-4 shadow-lg shadow-amber-500/20">
-                                                            Continuar (R$ {totalSelection.toFixed(2)})
+                                    {/* PASSO 1: SERVIÇOS */}
+                                    <div className="step-item p-4">
+                                        <div className={`${glassClass} rounded-[2.5rem] p-6 h-full overflow-y-auto no-scrollbar transition-all`}>
+                                            <div className="mb-8 px-2">
+                                                <h2 className={`text-2xl font-logo uppercase tracking-tight ${textContrast}`}>Serviços</h2>
+                                                <p className={`${subTextContrast} text-xs font-bold uppercase tracking-widest mt-1`}>O que faremos hoje?</p>
+                                            </div>
+                                            
+                                            <div className="grid gap-4 pb-4">
+                                                {services.map(s => {
+                                                    const sel = selection.services.find(i => i.id === s.id);
+                                                    return (
+                                                        <button key={s.id} onClick={() => {
+                                                            setSelection(p => sel ? {...p, services: p.services.filter(i => i.id !== s.id)} : {...p, services: [...p.services, s]});
+                                                        }} className={`w-full flex items-center justify-between p-5 rounded-[1.75rem] border-2 transition-all duration-300 press-effect text-left ${sel ? 'border-slate-950 dark:border-white bg-slate-900/5 dark:bg-white/5' : 'bg-transparent border-slate-100 dark:border-white/5'}`}>
+                                                            <div className="flex items-center gap-4">
+                                                                <div className={`p-3.5 rounded-2xl transition-all duration-300 ${sel ? (isDarkMode ? 'bg-white text-slate-900 shadow-xl' : 'bg-slate-950 text-white shadow-xl') : 'bg-slate-50 dark:bg-slate-800 text-slate-300'}`}><Icon name={sel ? "check" : "plus"} size={18} /></div>
+                                                                <div><p className={`font-bold text-base leading-none tracking-tight ${textContrast}`}>{s.name}</p><p className="text-[10px] text-slate-400 mt-2 font-black uppercase tracking-tighter italic">{s.duration}</p></div>
+                                                            </div>
+                                                            <span className={`font-logo text-lg ${textContrast}`}>{formatPrice(s.price)}</span>
                                                         </button>
-                                                    )}
+                                                    );
+                                                })}
+                                            </div>
+                                            {selection.services.length > 0 && (
+                                                <button onClick={() => setStep(2)} className={`w-full py-5 ${accentBtn} font-logo rounded-[1.5rem] mt-4 shadow-2xl press-effect uppercase text-sm tracking-widest italic transition-all`}>Seguinte (R$ {totalValue.toFixed(2)})</button>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* PASSO 2: DATA */}
+                                    <div className="step-item p-4">
+                                        <div className={`${glassClass} rounded-[2.5rem] p-10 text-center h-full flex flex-col justify-center transition-all border-2 border-slate-950/5 dark:border-white/5`}>
+                                            <div className="w-16 h-16 bg-slate-950/5 dark:bg-white/10 text-slate-950 dark:text-white rounded-3xl flex items-center justify-center mx-auto mb-8 border border-slate-950/10 dark:border-white/20"><Icon name="calendar" size={30} /></div>
+                                            <h2 className={`text-2xl font-logo uppercase mb-8 ${textContrast}`}>Data da Reserva</h2>
+                                            <input type="date" min={new Date().toISOString().split('T')[0]} className={`w-full p-6 rounded-[1.5rem] border-2 font-logo text-xl text-center [color-scheme:dark] mb-10 transition-all ${isDarkMode ? 'bg-slate-800 border-white/10 text-white' : 'bg-white border-slate-200 text-slate-950 shadow-inner'}`} onChange={e => setSelection({...selection, date: e.target.value})} />
+                                            <button onClick={() => setStep(3)} disabled={!selection.date} className={`w-full py-5 ${accentBtn} font-logo rounded-[1.5rem] shadow-xl press-effect uppercase tracking-widest`}>Ver Horários</button>
+                                            <button onClick={() => setStep(1)} className="mt-8 text-slate-400 font-black uppercase text-[10px] tracking-[0.3em] hover:text-slate-950 transition-colors italic">Alterar Menu</button>
+                                        </div>
+                                    </div>
+
+                                    {/* PASSO 3: HORÁRIOS DINÂMICOS */}
+                                    <div className="step-item p-4">
+                                        <div className={`${glassClass} rounded-[2.5rem] p-6 h-full overflow-y-auto no-scrollbar transition-all`}>
+                                            <h2 className={`text-xl font-logo uppercase mb-8 text-center tracking-tight ${textContrast}`}>Janelas Disponíveis</h2>
+                                            <div className="grid grid-cols-2 gap-4 pb-10">
+                                                {timeSlots.map(t => {
+                                                    const v = getVagasDisponiveis(selection.date, t);
+                                                    const off = v <= 0;
+                                                    return (
+                                                        <button key={t} disabled={off} onClick={() => {setSelection({...selection, time: t}); setStep(4)}} 
+                                                            className={`py-6 rounded-[1.5rem] border-2 font-logo text-lg relative transition-all press-effect ${off ? 'bg-slate-100 dark:bg-slate-900 border-slate-200 dark:border-white/5 text-slate-300 opacity-40 shadow-inner' : (isDarkMode ? 'bg-slate-800/80 border-transparent text-white active:bg-white active:text-slate-900' : 'bg-white border-slate-100 text-slate-900 active:bg-slate-950 active:text-white shadow-sm')}`}>
+                                                            {t} {!off && <span className="absolute top-1.5 right-3 text-[7px] text-slate-400 font-black uppercase tracking-widest">{v} Vagas</span>}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                            <button onClick={() => setStep(2)} className="w-full text-slate-400 font-black uppercase text-[9px] tracking-[0.3em] mt-2 mb-6 italic">Alterar Data</button>
+                                        </div>
+                                    </div>
+
+                                    {/* PASSO 4: FORMULÁRIO */}
+                                    <div className="step-item p-4">
+                                        <div className={`${glassClass} rounded-[2.5rem] p-8 space-y-8 h-full overflow-y-auto no-scrollbar transition-all`}>
+                                            <h2 className={`text-2xl font-logo uppercase ${textContrast}`}>Dados Finais</h2>
+                                            <div className="space-y-6">
+                                                <div className="space-y-2">
+                                                    <label className={`text-[10px] font-black uppercase px-4 tracking-[0.2em] ${subTextContrast}`}>Nome Completo</label>
+                                                    <input required placeholder="Quem atendemos?" className={`w-full p-5 rounded-[1.5rem] border-2 outline-none focus:border-slate-950 dark:focus:border-white font-bold transition-all ${isDarkMode ? 'bg-slate-800 border-white/5 text-white' : 'bg-slate-50 border-slate-100 text-slate-950 shadow-inner'}`} onChange={e => setSelection({...selection, name: e.target.value})} />
                                                 </div>
-                                            )}
-
-                                            {step === 2 && (
-                                                <div className="space-y-6 fade-in">
-                                                    <h2 className="text-xl font-black italic uppercase text-white tracking-tighter">Escolha a Data</h2>
-                                                    <div className="bg-zinc-800/50 p-4 rounded-3xl border border-zinc-700/50">
-                                                        <input type="date" min={new Date().toISOString().split('T')[0]} 
-                                                            className="w-full bg-transparent p-4 text-white text-lg font-bold outline-none [color-scheme:dark]" 
-                                                            onChange={e => setSelection({...selection, date: e.target.value})} />
-                                                    </div>
-                                                    <button disabled={!selection.date} onClick={() => setStep(3)} className="w-full py-5 btn-primary rounded-3xl shadow-xl shadow-amber-500/20">Ver Horários</button>
-                                                    <button onClick={() => setStep(1)} className="w-full text-zinc-500 text-xs font-bold uppercase pt-2">Voltar aos Serviços</button>
+                                                <div className="space-y-2">
+                                                    <label className={`text-[10px] font-black uppercase px-4 tracking-[0.2em] ${subTextContrast}`}>WhatsApp (DDD + N°)</label>
+                                                    <input required type="tel" placeholder="83 99999-9999" className={`w-full p-5 rounded-[1.5rem] border-2 outline-none focus:border-slate-950 dark:focus:border-white font-bold transition-all ${isDarkMode ? 'bg-slate-800 border-white/5 text-white' : 'bg-slate-50 border-slate-100 text-slate-950 shadow-inner'}`} value={selection.phone} onChange={e => setSelection({...selection, phone: e.target.value.replace(/\D/g, '').slice(0,11)})} />
                                                 </div>
-                                            )}
+                                            </div>
+                                            <button onClick={handleBooking} disabled={loading || selection.phone.length < 10 || !selection.name} className={`w-full py-5 ${accentBtn} font-logo rounded-[1.5rem] shadow-2xl press-effect uppercase tracking-widest italic transition-all`}>Validar Agendamento</button>
+                                        </div>
+                                    </div>
 
-                                            {step === 3 && (
-                                                <div className="space-y-6 fade-in">
-                                                    <h2 className="text-xl font-black text-center italic uppercase text-white tracking-tighter">Horários Livres</h2>
-                                                    <div className="grid grid-cols-2 gap-3">
-                                                        {timeSlots.map(t => {
-                                                            const vagas = getVagasDisponiveis(selection.date, t);
-                                                            const esgotado = vagas <= 0;
-                                                            return (
-                                                                <button key={t} disabled={esgotado} onClick={() => {setSelection({...selection, time: t}); setStep(4)}} 
-                                                                    className={`py-5 rounded-2xl border font-black relative transition-all ${esgotado ? 'bg-zinc-950 border-zinc-900 text-zinc-800' : 'bg-zinc-800/80 border-zinc-700/50 text-white active:bg-amber-500 active:text-black'}`}>
-                                                                    {t}
-                                                                    {!esgotado && <span className="absolute top-1 right-2 text-[7px] text-amber-500 uppercase font-black">{vagas} vagas</span>}
-                                                                    {esgotado && <span className="absolute inset-0 flex items-center justify-center bg-black/40 text-[8px] rounded-2xl opacity-50 uppercase">Esgotado</span>}
-                                                                </button>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                    <button onClick={() => setStep(2)} className="w-full text-zinc-500 text-xs font-bold uppercase pt-4">Escolher Outro Dia</button>
-                                                </div>
-                                            )}
-
-                                            {step === 4 && (
-                                                <form onSubmit={handleBookingSubmit} className="space-y-6 fade-in">
-                                                    <h2 className="text-xl font-black italic uppercase text-white tracking-tighter">Seus Dados</h2>
-                                                    <div className="space-y-4">
-                                                        <input required placeholder="Nome Completo" className="w-full bg-zinc-800/80 p-5 rounded-2xl border border-zinc-700/50 outline-none focus:border-amber-500 text-white" 
-                                                            onChange={e => setSelection({...selection, name: e.target.value})} />
-                                                        
-                                                        <input required type="tel" placeholder="WhatsApp (DDD + Número)" className="w-full bg-zinc-800/80 p-5 rounded-2xl border border-zinc-700/50 outline-none focus:border-amber-500 text-white" 
-                                                            value={selection.phone} onChange={e => setSelection({...selection, phone: e.target.value.replace(/\D/g, '').slice(0,11)})} />
-                                                    </div>
-                                                    
-                                                    <div className="p-5 bg-amber-500/5 rounded-3xl border border-amber-500/10 text-sm">
-                                                        <p className="text-zinc-500 uppercase font-black text-[10px] mb-2 tracking-widest">Resumo</p>
-                                                        <p className="text-white font-bold italic">{selection.date} às {selection.time}</p>
-                                                        <p className="text-amber-500 font-black text-lg">Total: R$ {totalSelection.toFixed(2)}</p>
-                                                    </div>
-
-                                                    <button type="submit" disabled={loading || selection.phone.length < 10 || !selection.name} className="w-full py-5 btn-primary rounded-3xl shadow-xl">
-                                                        {loading ? 'A Gravar...' : 'Confirmar Agendamento'}
-                                                    </button>
-                                                </form>
-                                            )}
-
-                                            {step === 5 && (
-                                                <div className="text-center py-10 fade-in">
-                                                    <Icon name="check-circle" size={80} className="text-green-500 mx-auto mb-6" />
-                                                    <h2 className="text-3xl font-black uppercase italic text-white mb-2 tracking-tighter">Agendado!</h2>
-                                                    <p className="text-zinc-500 text-sm mb-8">Confirmamos o teu lugar na cadeira. Vemo-nos em breve!</p>
-                                                    
-                                                    <button onClick={handleWhatsAppRedirect} className="w-full py-5 bg-[#25D366] text-white font-black rounded-3xl flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all">
-                                                        <Icon name="message-circle" /> Avisar no WhatsApp
-                                                    </button>
-                                                    
-                                                    <button onClick={() => window.location.reload()} className="mt-8 text-zinc-600 text-[10px] font-black uppercase tracking-widest">Novo Agendamento</button>
-                                                </div>
-                                            )}
-                                        </>
-                                    )}
+                                    {/* PASSO 5: SUCESSO */}
+                                    <div className="step-item p-4">
+                                        <div className={`${glassClass} rounded-[2.5rem] p-10 text-center h-full flex flex-col justify-center items-center transition-all border-2 border-slate-950/10 dark:border-white/5`}>
+                                            <div className="relative mb-10">
+                                                <div className={`w-24 h-24 rounded-full flex items-center justify-center shadow-xl border-4 ${isDarkMode ? 'bg-green-500 border-slate-900' : 'bg-green-500 border-white'}`}><Icon name="check" size={48} className="text-white" /></div>
+                                                <div className="absolute -inset-4 bg-green-500/10 blur-2xl rounded-full -z-10"></div>
+                                            </div>
+                                            <h2 className={`text-3xl font-logo uppercase mb-3 tracking-tighter leading-none ${textContrast}`}>Reservado!</h2>
+                                            <p className={`${subTextContrast} text-sm mb-12 max-w-[220px] font-medium leading-relaxed italic`}>O teu lugar na cadeira está garantido. Estaremos à tua espera.</p>
+                                            <button onClick={sendWhatsApp} className="w-full py-5 bg-[#128C7E] text-white font-logo rounded-[1.5rem] shadow-xl press-effect flex items-center justify-center gap-3 tracking-widest uppercase italic">
+                                                <Icon name="message-circle" /> Confirmar no WhatsApp
+                                            </button>
+                                            <button onClick={() => window.location.reload()} className="mt-10 text-slate-400 font-black uppercase text-[10px] tracking-[0.4em] hover:text-slate-950 transition-colors">Novo Agendamento</button>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         ) : (
-                            /* PAINEL STAFF */
-                            <div className="fade-in space-y-6 pb-12">
-                                <div className="flex bg-zinc-800 p-1.5 rounded-2xl border border-zinc-700 overflow-x-auto no-scrollbar shadow-inner">
-                                    {['agenda', 'servicos', 'configuracao'].map(tab => (
-                                        <button key={tab} onClick={() => setAdminTab(tab)} className={`flex-1 py-3 px-4 rounded-xl font-black text-[10px] uppercase transition-all whitespace-nowrap ${adminTab === tab ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/20' : 'text-zinc-500'}`}>
-                                            {tab === 'configuracao' ? 'Loja' : tab}
+                            /* PAINEL STAFF RESPONSIVO */
+                            <div className="flex-1 p-6 overflow-y-auto no-scrollbar fade-in space-y-8 pb-24">
+                                <div className={`flex p-1.5 rounded-[1.5rem] border shadow-inner transition-all ${isDarkMode ? 'bg-slate-900/60 border-white/5' : 'bg-slate-100 border-slate-200'}`}>
+                                    {['agenda', 'servicos', 'loja'].map(t => (
+                                        <button key={t} onClick={() => setAdminTab(t)} className={`flex-1 py-3 rounded-xl font-logo text-[10px] uppercase transition-all duration-300 ${adminTab === t ? (isDarkMode ? 'bg-white text-slate-950 shadow-lg' : 'bg-slate-950 text-white shadow-lg') : isDarkMode ? 'text-slate-600' : 'text-slate-400'}`}>
+                                            {t === 'loja' ? 'Gestão' : t}
                                         </button>
                                     ))}
                                 </div>
 
+                                {adminTab === 'loja' && (
+                                    <div className="space-y-6 animate-in slide-in-from-bottom-4">
+                                        {/* CONTROLO DE ABERTURA E FECHO MANUAL */}
+                                        <div className={`${glassClass} p-8 rounded-[2.5rem] border-2 ${config.isManualClosed ? 'border-red-500/30' : 'border-green-500/30'}`}>
+                                            <div className="flex items-center justify-between mb-4">
+                                                <div>
+                                                    <h3 className={`text-sm font-logo uppercase tracking-tight ${textContrast}`}>Status da Barbearia</h3>
+                                                    <p className={`text-[10px] font-black uppercase italic ${config.isManualClosed ? 'text-red-500' : 'text-green-500'}`}>
+                                                        {config.isManualClosed ? 'Loja Fechada Manualmente' : 'Loja Operacional'}
+                                                    </p>
+                                                </div>
+                                                <label className="switch">
+                                                    <input type="checkbox" checked={!config.isManualClosed} onChange={e => updateSettings({ isManualClosed: !e.target.checked })} />
+                                                    <span className="slider-toggle"></span>
+                                                </label>
+                                            </div>
+                                            <p className="text-[9px] text-slate-400 font-medium italic leading-relaxed">
+                                                Use este interruptor para fechar a loja instantaneamente em feriados ou imprevistos. Clientes verão uma mensagem de pausa.
+                                            </p>
+                                        </div>
+
+                                        {/* HORÁRIOS DE FUNCIONAMENTO */}
+                                        <div className={`${glassClass} p-8 rounded-[2.5rem] space-y-6 shadow-xl`}>
+                                            <div className="flex items-center gap-3 px-2">
+                                                <Icon name="clock" size={18} className="text-slate-950 dark:text-white" />
+                                                <h3 className={`text-[11px] font-logo uppercase tracking-widest ${textContrast}`}>Janela de Atendimento</h3>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-6">
+                                                <div className="space-y-2">
+                                                    <label className="text-[8px] font-black text-slate-400 uppercase px-4 tracking-[0.2em]">Início</label>
+                                                    <input type="time" className={`w-full p-4 rounded-2xl border-2 font-logo text-lg [color-scheme:dark] outline-none transition-all ${isDarkMode ? 'bg-slate-800 border-white/5 text-white' : 'bg-white border-slate-200 text-slate-950'}`} value={config.openTime || '09:00'} onChange={e => updateSettings({ openTime: e.target.value })} />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <label className="text-[8px] font-black text-slate-400 uppercase px-4 tracking-[0.2em]">Fim</label>
+                                                    <input type="time" className={`w-full p-4 rounded-2xl border-2 font-logo text-lg [color-scheme:dark] outline-none transition-all ${isDarkMode ? 'bg-slate-800 border-white/5 text-white' : 'bg-white border-slate-200 text-slate-950'}`} value={config.closeTime || '19:00'} onChange={e => updateSettings({ closeTime: e.target.value })} />
+                                                </div>
+                                            </div>
+                                            <p className="text-[8px] text-slate-400 font-bold uppercase italic text-center">Os horários para o cliente serão gerados entre este intervalo.</p>
+                                        </div>
+
+                                        <div className={`${glassClass} p-8 rounded-[2.5rem] space-y-5 shadow-lg`}>
+                                            <div className="flex justify-between items-center"><p className={`font-logo uppercase text-[11px] ${textContrast}`}>Cadeiras Simultâneas</p><span className={`text-4xl font-logo leading-none ${textContrast}`}>{config.maxPerSlot}</span></div>
+                                            <input type="range" min="1" max="10" value={config.maxPerSlot} onChange={e => updateSettings({ maxPerSlot: parseInt(e.target.value) })} className="w-full accent-slate-950 dark:accent-white" />
+                                        </div>
+
+                                        <div className={`${glassClass} p-8 rounded-[2.5rem] space-y-4 shadow-xl`}>
+                                            <div className="flex items-center gap-3 px-2">
+                                                <Icon name="phone" size={18} className="text-slate-950 dark:text-white" />
+                                                <h3 className={`text-[11px] font-logo uppercase tracking-widest ${textContrast}`}>WhatsApp Barbearia</h3>
+                                            </div>
+                                            <input className={`w-full p-5 rounded-[1.5rem] border-2 font-logo text-lg ${isDarkMode ? 'bg-slate-800 border-white/5 text-white' : 'bg-white border-slate-100 text-slate-950 shadow-inner'}`} value={config.whatsapp} onChange={e => updateSettings({ whatsapp: e.target.value.replace(/\D/g, '') })} />
+                                        </div>
+                                    </div>
+                                )}
+
                                 {adminTab === 'agenda' && (
                                     <div className="space-y-4">
-                                        <h2 className="text-xl font-black uppercase italic text-white px-2 tracking-tighter">Próximos Clientes</h2>
-                                        {bookings.length === 0 ? <p className="text-center py-20 opacity-30 text-xs italic">Nenhum agendamento registado</p> : 
+                                        <h2 className={`text-xl font-logo uppercase tracking-tight ${textContrast} px-2`}>Fluxo de Hoje</h2>
+                                        {bookings.length === 0 ? <p className="text-center py-20 opacity-20 italic">Sem reservas até agora.</p> : 
                                             bookings.map(b => (
-                                                <div key={b.id} className="bg-zinc-900/80 p-5 rounded-[2rem] border border-zinc-800 flex items-center justify-between shadow-lg hover:border-amber-500/20 transition-all">
-                                                    <div className="flex items-center gap-4">
-                                                        <div className="w-12 h-12 bg-zinc-800 rounded-2xl flex items-center justify-center text-amber-500 font-black border border-zinc-700">{b.time?.split(':')[0]}</div>
-                                                        <div>
-                                                            <p className="font-bold text-white uppercase text-sm leading-none">{b.name}</p>
-                                                            <p className="text-[10px] text-zinc-500 mt-1 italic uppercase font-bold tracking-tighter">{b.date} • {b.time}</p>
-                                                        </div>
+                                                <div key={b.id} className={`${glassClass} p-6 rounded-[2rem] flex items-center justify-between shadow-lg`}>
+                                                    <div className="flex items-center gap-5">
+                                                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-logo text-xl border-2 ${isDarkMode ? 'bg-slate-800 border-white/10 text-white' : 'bg-white border-slate-200 text-slate-950'}`}>{b.time?.split(':')[0]}</div>
+                                                        <div><p className={`font-bold uppercase text-sm ${textContrast}`}>{b.name}</p><p className={`${subTextContrast} text-[10px] italic`}>{b.date} • {b.time}</p></div>
                                                     </div>
-                                                    <div className="flex gap-2">
-                                                        <button onClick={() => window.open(`https://wa.me/55${b.phone.replace(/\D/g,'')}?text=Olá ${b.name}, confirmamos o seu horário na Don Barber!`)} className="p-3 bg-green-500/10 text-green-500 rounded-2xl transition-all active:scale-90"><Icon name="message-circle" size={18}/></button>
-                                                        <button onClick={() => deleteBooking(b.id)} className="p-3 bg-red-500/10 text-red-500 rounded-2xl transition-all active:scale-90"><Icon name="trash-2" size={18}/></button>
-                                                    </div>
+                                                    <button onClick={() => deleteBooking(b.id)} className="p-3 bg-red-500/10 text-red-500 rounded-2xl"><Icon name="trash-2" size={16}/></button>
                                                 </div>
                                             ))
                                         }
@@ -438,92 +468,22 @@
 
                                 {adminTab === 'servicos' && (
                                     <div className="space-y-6">
-                                        <div className="bg-zinc-900/80 p-6 rounded-[2.5rem] border border-zinc-800 space-y-4 shadow-2xl">
-                                            <h3 className="text-[10px] font-black text-zinc-500 uppercase px-2 italic tracking-widest flex items-center gap-2"><Icon name="plus-circle" size={14}/> Novo Serviço</h3>
-                                            <input placeholder="Nome" className="w-full bg-zinc-800 p-4 rounded-2xl outline-none border border-zinc-700 text-white text-sm" value={newService.name} onChange={e => setNewService({...newService, name: e.target.value})} />
-                                            <div className="grid grid-cols-2 gap-3">
-                                                <input placeholder="Preço (R$)" className="w-full bg-zinc-800 p-4 rounded-2xl border border-zinc-700 text-white text-sm" value={newService.price} onChange={e => setNewService({...newService, price: e.target.value})} />
-                                                <input placeholder="Tempo (min)" className="w-full bg-zinc-800 p-4 rounded-2xl border border-zinc-700 text-white text-sm" value={newService.duration} onChange={e => setNewService({...newService, duration: e.target.value})} />
+                                        <div className={`${glassClass} p-7 rounded-[2.5rem] space-y-4 shadow-xl`}>
+                                            <h3 className={`text-[10px] font-black uppercase px-2 tracking-widest italic ${subTextContrast}`}>+ Novo Serviço</h3>
+                                            <input placeholder="Ex: Degradê Navalhado" className={`w-full p-4 rounded-2xl border-2 text-sm outline-none focus:border-slate-900 dark:focus:border-white font-bold transition-all ${isDarkMode ? 'bg-slate-800 border-white/5 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'}`} value={newService.name} onChange={e => setNewService({...newService, name: e.target.value})} />
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <input placeholder="R$ 45" className={`w-full p-4 rounded-2xl border-2 text-sm outline-none ${isDarkMode ? 'bg-slate-800 border-white/5 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'}`} value={newService.price} onChange={e => setNewService({...newService, price: e.target.value})} />
+                                                <input placeholder="40 min" className={`w-full p-4 rounded-2xl border-2 text-sm outline-none ${isDarkMode ? 'bg-slate-800 border-white/5 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'}`} value={newService.duration} onChange={e => setNewService({...newService, duration: e.target.value})} />
                                             </div>
-                                            <button onClick={async () => {
-                                                if (!newService.name) return;
-                                                await client.from('services').insert([newService]);
-                                                setNewService({name:'', price:'', duration:''});
-                                                fetchData();
-                                            }} className="w-full py-4 bg-white text-black font-black rounded-2xl uppercase text-[10px] tracking-widest hover:bg-amber-500 transition-all active:scale-95">Gravar Novo Serviço</button>
+                                            <button onClick={async () => { if(!newService.name) return; await client.from('services').insert([newService]); fetchData(); setNewService({name:'',price:'',duration:''}); }} className={`w-full py-4 ${accentBtn} font-logo rounded-2xl uppercase text-[10px] tracking-widest`}>Gravar Serviço</button>
                                         </div>
-                                        <div className="grid gap-2">
+                                        <div className="grid gap-3">
                                             {services.map(s => (
-                                                <div key={s.id} className="bg-zinc-900/40 p-4 rounded-2xl border border-zinc-800 flex justify-between items-center px-6">
-                                                    <span className="font-bold text-sm italic text-white">{s.name} <span className="text-amber-500 ml-2">({s.price})</span></span>
-                                                    <button onClick={async () => { await client.from('services').delete().eq('id', s.id); fetchData(); }} className="text-zinc-700 hover:text-red-500 p-2"><Icon name="trash-2" size={16}/></button>
+                                                <div key={s.id} className={`${glassClass} p-5 rounded-[1.75rem] flex justify-between items-center px-8 border-l-4 border-slate-950 dark:border-white`}>
+                                                    <div><p className={`font-bold text-sm tracking-tight ${textContrast}`}>{s.name}</p><p className="text-[10px] text-slate-400 font-bold uppercase italic">{s.price}</p></div>
+                                                    <button onClick={async () => { await client.from('services').delete().eq('id', s.id); fetchData(); }} className="p-3 bg-red-500/10 text-red-500 rounded-2xl"><Icon name="trash-2" size={16}/></button>
                                                 </div>
                                             ))}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {adminTab === 'configuracao' && (
-                                    <div className="space-y-6 animate-in slide-in-from-bottom-4 pb-10">
-                                        {/* Contacto WhatsApp */}
-                                        <div className="bg-zinc-900/80 p-6 rounded-[2.5rem] border border-amber-500/20 shadow-xl space-y-4">
-                                            <h3 className="text-[10px] font-black text-amber-500 uppercase flex items-center gap-2 italic tracking-widest px-2"><Icon name="phone" size={14}/> Contacto de Atendimento</h3>
-                                            <div className="flex items-center gap-3">
-                                                <div className="p-4 bg-zinc-800 rounded-2xl text-green-500 border border-white/5"><Icon name="message-circle" size={20} /></div>
-                                                <input type="text" placeholder="Apenas DDD e Número (ex: 83996190083)" className="flex-1 bg-zinc-800 p-5 rounded-3xl border border-zinc-700 text-white font-black text-lg outline-none focus:border-amber-500 transition-all" 
-                                                    value={config.whatsapp || ''} onChange={e => updateSettings({ whatsapp: e.target.value.replace(/\D/g, '').slice(0,11) })} />
-                                            </div>
-                                            <p className="text-[9px] text-zinc-500 italic px-4 font-medium uppercase tracking-tighter">O sistema adicionará o prefixo Brasil (+55) automaticamente para os links de WhatsApp.</p>
-                                        </div>
-
-                                        {/* Status de Abertura */}
-                                        <div className="bg-zinc-900/80 p-6 rounded-[2.5rem] border border-zinc-800 shadow-xl flex items-center justify-between hover:border-white/10 transition-all">
-                                            <div className="flex items-center gap-4">
-                                                <div className={`p-4 rounded-2xl ${config.isManualClosed ? 'bg-red-500/10 text-red-500' : 'bg-green-500/10 text-green-500 shadow-lg shadow-green-500/10'}`}>
-                                                    <Icon name={config.isManualClosed ? "door-closed" : "door-open"} size={28} />
-                                                </div>
-                                                <div>
-                                                    <h3 className="font-bold text-white uppercase text-sm leading-none">Status da Loja</h3>
-                                                    <p className="text-[9px] text-zinc-500 font-bold uppercase mt-1.5 tracking-tighter tracking-widest">
-                                                        {config.isManualClosed ? "Fechada Manualmente" : "Aberta aos Clientes"}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            <label className="switch">
-                                                <input type="checkbox" checked={config.isManualClosed || false} onChange={e => updateSettings({ isManualClosed: e.target.checked })} />
-                                                <span className="slider"></span>
-                                            </label>
-                                        </div>
-
-                                        {/* Vagas Simultâneas */}
-                                        <div className="bg-zinc-900/80 p-6 rounded-[2.5rem] border border-zinc-800 shadow-xl space-y-4">
-                                            <h3 className="text-[10px] font-black text-zinc-500 uppercase flex items-center gap-2 italic tracking-widest px-2"><Icon name="users" size={14}/> Vagas por Hora (Barbeiros)</h3>
-                                            <div className="flex items-center gap-6 px-2">
-                                                <input type="range" min="1" max="10" value={config.maxPerSlot || 2} 
-                                                    onChange={e => updateSettings({ maxPerSlot: parseInt(e.target.value) })} 
-                                                    className="flex-1 accent-amber-500 h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer" />
-                                                <div className="text-center min-w-[40px]">
-                                                    <span className="text-3xl font-black text-white">{config.maxPerSlot}</span>
-                                                    <p className="text-[8px] text-zinc-600 uppercase font-black">Cadeiras</p>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Horários de Funcionamento */}
-                                        <div className="bg-zinc-900/80 p-6 rounded-[2.5rem] border border-zinc-800 shadow-xl space-y-4">
-                                            <h3 className="text-[10px] font-black text-zinc-500 uppercase flex items-center gap-2 italic tracking-widest px-2"><Icon name="clock" size={14}/> Horário de Funcionamento</h3>
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <div className="space-y-1">
-                                                    <label className="text-[9px] font-bold text-zinc-600 uppercase px-4">Abertura</label>
-                                                    <input type="time" className="w-full bg-zinc-800 p-4 rounded-2xl border border-zinc-700 text-white font-black text-lg outline-none [color-scheme:dark] focus:border-amber-500" 
-                                                        value={config.openTime || '09:00'} onChange={e => updateSettings({ openTime: e.target.value })} />
-                                                </div>
-                                                <div className="space-y-1">
-                                                    <label className="text-[9px] font-bold text-zinc-600 uppercase px-4">Fecho</label>
-                                                    <input type="time" className="w-full bg-zinc-800 p-4 rounded-2xl border border-zinc-700 text-white font-black text-lg outline-none [color-scheme:dark] focus:border-amber-500" 
-                                                        value={config.closeTime || '19:00'} onChange={e => updateSettings({ closeTime: e.target.value })} />
-                                                </div>
-                                            </div>
                                         </div>
                                     </div>
                                 )}
@@ -531,37 +491,23 @@
                         )}
                     </main>
 
-                    {/* Navegação Mobile Inferior */}
-                    <nav className="fixed bottom-0 left-0 right-0 bg-zinc-900/95 backdrop-blur-xl border-t border-white/5 px-10 py-5 z-50 rounded-t-[2.5rem] shadow-2xl max-w-[600px] mx-auto flex justify-between items-center">
-                        <button onClick={() => {setView('user'); setStep(1)}} className={`flex flex-col items-center gap-1.5 transition-all active:scale-90 ${view === 'user' ? 'text-amber-500' : 'text-zinc-600'}`}>
-                            <Icon name="home" size={24} />
-                            <span className="text-[8px] font-black uppercase italic tracking-widest">Início</span>
-                        </button>
-                        <div className="w-px h-6 bg-zinc-800"></div>
-                        <button onClick={() => setShowPinModal(true)} className={`flex flex-col items-center gap-1.5 transition-all active:scale-90 ${view === 'admin' ? 'text-amber-500' : 'text-zinc-600'}`}>
-                            <Icon name="lock" size={24} />
-                            <span className="text-[8px] font-black uppercase italic tracking-widest">Acesso Staff</span>
-                        </button>
+                    {/* Navbar Estática */}
+                    <nav className={`p-5 backdrop-blur-3xl border-t flex justify-around items-center z-50 transition-all duration-500 ${isDarkMode ? 'bg-slate-950/90 border-white/5 shadow-2xl' : 'bg-white border-slate-200 shadow-inner'}`}>
+                        <button onClick={() => {setView('user'); setStep(1)}} className={`flex flex-col items-center gap-1.5 transition-all duration-300 press-effect ${view === 'user' ? (isDarkMode ? 'text-white scale-110' : 'text-slate-950 scale-110') : 'text-slate-400'}`}><Icon name="calendar-days" size={24} /><span className="text-[8px] font-black uppercase tracking-widest italic font-logo">Agendar</span></button>
+                        <div className="w-px h-8 bg-slate-500/10"></div>
+                        <button onClick={() => setShowPinModal(true)} className={`flex flex-col items-center gap-1.5 transition-all duration-300 press-effect ${view === 'admin' ? (isDarkMode ? 'text-white scale-110' : 'text-slate-950 scale-110') : 'text-slate-400'}`}><Icon name="layout-dashboard" size={24} /><span className="text-[8px] font-black uppercase tracking-widest italic font-logo">Staff</span></button>
                     </nav>
 
-                    {/* Modal de Segurança PIN */}
+                    {/* Modal PIN */}
                     {showPinModal && (
-                        <div className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center p-6 backdrop-blur-md animate-in fade-in duration-300">
-                            <div className="w-full max-w-xs text-center space-y-8 animate-in zoom-in duration-300">
-                                <div className="w-24 h-24 bg-amber-500/10 text-amber-500 rounded-[2rem] flex items-center justify-center mx-auto rotate-6 border border-amber-500/20 shadow-2xl shadow-amber-500/10">
-                                    <Icon name="shield-check" size={48} />
-                                </div>
-                                <div className="space-y-2">
-                                    <h3 className="text-2xl font-black uppercase italic text-white tracking-tighter leading-none">Restrito</h3>
-                                    <p className="text-zinc-500 text-sm font-medium">Introduza o PIN da Barbearia</p>
-                                </div>
-                                <input type="password" inputMode="numeric" maxLength={4} autoFocus className="w-full bg-zinc-900 border border-zinc-800 rounded-3xl py-7 text-center text-5xl font-black tracking-[0.5em] outline-none text-white focus:border-amber-500 shadow-2xl transition-all" 
-                                    value={pinInput} onChange={e => {
-                                        setPinInput(e.target.value);
-                                        if (e.target.value === ADMIN_PIN) { setView('admin'); setShowPinModal(false); setPinInput(''); fetchData(); }
-                                    }} 
+                        <div className="fixed inset-0 z-[100] bg-slate-950/95 flex items-center justify-center p-6 backdrop-blur-2xl transition-all">
+                            <div className="w-full max-w-xs text-center space-y-12 animate-in zoom-in duration-300">
+                                <div className="w-20 h-20 bg-white text-slate-950 rounded-full flex items-center justify-center mx-auto border-4 border-slate-950 shadow-2xl shadow-white/5"><Icon name="shield-check" size={32} /></div>
+                                <h3 className="text-2xl font-logo uppercase italic tracking-tight text-white">Privado Staff</h3>
+                                <input type="password" inputMode="numeric" maxLength={4} autoFocus className="w-full bg-transparent border-b-4 border-white py-6 text-center text-5xl font-logo tracking-[0.6em] outline-none text-white transition-all focus:border-slate-400" 
+                                    onChange={e => { if (e.target.value === ADMIN_PIN) { setView('admin'); setShowPinModal(false); fetchData(); } }} 
                                 />
-                                <button onClick={() => {setShowPinModal(false); setPinInput('')}} className="text-zinc-600 font-bold uppercase text-[10px] tracking-widest italic hover:text-white transition-colors">Voltar</button>
+                                <button onClick={() => setShowPinModal(false)} className="text-slate-500 font-black uppercase text-[10px] tracking-[0.4em] hover:text-white transition-colors italic">Voltar</button>
                             </div>
                         </div>
                     )}
