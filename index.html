@@ -57,7 +57,12 @@
             transition: all 0.2s;
         }
         .btn-primary:active { transform: scale(0.95); }
-        .btn-primary:disabled { opacity: 0.4; transform: scale(1); }
+        .btn-primary:disabled { 
+            background-color: #3f3f46;
+            color: #71717a;
+            transform: scale(1);
+            cursor: not-allowed;
+        }
     </style>
 </head>
 <body class="text-zinc-100">
@@ -73,11 +78,9 @@
         const { createClient } = supabase;
         const client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-        // --- NÚMERO ATUALIZADO ---
         const WHATSAPP_BARBEARIA = "5583996190083"; 
         const ADMIN_PIN = "1234";
 
-        // Wrapper para ícones Lucide
         const Icon = ({ name, size = 20, className = "" }) => {
             const ref = useRef(null);
             useEffect(() => {
@@ -108,7 +111,6 @@
             const [selection, setSelection] = useState({ service: null, date: '', time: '', name: '', phone: '' });
             const [newService, setNewService] = useState({ name: '', price: '', duration: '' });
 
-            // Busca de dados inicial
             const fetchData = useCallback(async () => {
                 setError(null);
                 setErrorDetail(null);
@@ -128,11 +130,11 @@
                 } catch (err) {
                     console.error("Erro na comunicação:", err);
                     if (err.message === 'Failed to fetch' || err.name === 'TypeError') {
-                        setError("Ligação ao banco de dados bloqueada pelo navegador.");
-                        setErrorDetail("Por favor, desative AdBlockers ou o Brave Shields para este site.");
+                        setError("Ligação ao banco de dados bloqueada.");
+                        setErrorDetail("Desativa AdBlockers ou Brave Shields para este site.");
                     } else {
                         setError("Erro ao ligar ao servidor.");
-                        setErrorDetail(err.message || "Verifique as configurações do Supabase.");
+                        setErrorDetail(err.message || "Verifica o Supabase.");
                     }
                 } finally {
                     setInitialLoading(false);
@@ -141,8 +143,6 @@
 
             useEffect(() => {
                 fetchData();
-                
-                // Realtime - Ouve mudanças nas tabelas
                 const channel = client.channel('db-changes')
                     .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => fetchData())
                     .on('postgres_changes', { event: '*', schema: 'public', table: 'services' }, () => fetchData())
@@ -158,6 +158,8 @@
 
             const handleBooking = async (e) => {
                 e.preventDefault();
+                if (selection.phone.length < 10) return;
+                
                 setLoading(true);
                 setError(null);
                 try {
@@ -206,6 +208,14 @@
                 await client.from('settings').upsert({ id: 'global', maxPerSlot: v });
             };
 
+            // Função para limpar e validar o telemóvel
+            const handlePhoneInput = (e) => {
+                const val = e.target.value.replace(/\D/g, ''); // Remove tudo que não é número
+                if (val.length <= 11) {
+                    setSelection({...selection, phone: val});
+                }
+            };
+
             return (
                 <div className="min-h-screen flex flex-col pb-24 max-w-[600px] mx-auto bg-zinc-950 border-x border-white/5 shadow-2xl relative">
                     
@@ -218,7 +228,7 @@
                                 <div>
                                     <h1 className="text-xl font-black italic uppercase tracking-tighter leading-none">Don <span className="text-amber-500">Barber</span></h1>
                                     <span className="text-[10px] font-bold text-amber-500/50 tracking-widest uppercase block mt-1">
-                                        {view === 'user' ? 'Agendamento Online' : 'Painel de Gestão'}
+                                        {view === 'user' ? 'Agendamento Online' : 'Painel Staff'}
                                     </span>
                                 </div>
                             </div>
@@ -247,7 +257,6 @@
                         {view === 'user' ? (
                             <div className="fade-in">
                                 <div className="bg-zinc-900/40 rounded-[2.5rem] border border-zinc-800/50 p-6 shadow-2xl backdrop-blur-sm">
-                                    
                                     {step === 1 && (
                                         <div className="space-y-4">
                                             <h2 className="text-xl font-black italic uppercase px-2 flex justify-between items-center">
@@ -315,17 +324,31 @@
                                         <form onSubmit={handleBooking} className="space-y-6 fade-in">
                                             <h2 className="text-xl font-black italic uppercase">Finalizar Reserva</h2>
                                             <div className="space-y-4">
-                                                <input required placeholder="Seu Nome Completo" className="w-full bg-zinc-800/80 p-5 rounded-2xl border border-zinc-700/50 outline-none focus:border-amber-500 text-white" 
-                                                    onChange={e => setSelection({...selection, name: e.target.value})} />
-                                                <input required type="tel" placeholder="Seu WhatsApp (DDD)" className="w-full bg-zinc-800/80 p-5 rounded-2xl border border-zinc-700/50 outline-none focus:border-amber-500 text-white" 
-                                                    onChange={e => setSelection({...selection, phone: e.target.value})} />
+                                                <div className="space-y-1">
+                                                    <label className="text-[10px] font-black text-zinc-500 uppercase px-2 tracking-widest">Nome Completo</label>
+                                                    <input required placeholder="Como te chamas?" className="w-full bg-zinc-800/80 p-5 rounded-2xl border border-zinc-700/50 outline-none focus:border-amber-500 text-white placeholder:opacity-20" 
+                                                        value={selection.name}
+                                                        onChange={e => setSelection({...selection, name: e.target.value})} />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <label className="text-[10px] font-black text-zinc-500 uppercase px-2 tracking-widest flex justify-between">
+                                                        <span>WhatsApp (DDD + Número)</span>
+                                                        <span className={selection.phone.length >= 10 ? "text-green-500" : "text-zinc-700"}>{selection.phone.length}/11</span>
+                                                    </label>
+                                                    <input required type="tel" placeholder="Ex: 83999999999" className="w-full bg-zinc-800/80 p-5 rounded-2xl border border-zinc-700/50 outline-none focus:border-amber-500 text-white placeholder:opacity-20" 
+                                                        value={selection.phone}
+                                                        onChange={handlePhoneInput} />
+                                                    {selection.phone.length > 0 && selection.phone.length < 10 && (
+                                                        <p className="text-[10px] text-amber-500/70 px-2 italic">Introduza um número válido (mín. 10 dígitos)</p>
+                                                    )}
+                                                </div>
                                             </div>
                                             <div className="p-5 bg-amber-500/5 rounded-3xl border border-amber-500/10">
                                                 <p className="text-sm font-black text-amber-500 uppercase tracking-tight">{selection.service?.name}</p>
                                                 <p className="text-base text-zinc-300 font-medium italic">{selection.date} às {selection.time}</p>
                                             </div>
-                                            <button type="submit" disabled={loading} className="w-full py-5 btn-primary rounded-3xl shadow-xl">
-                                                {loading ? 'A Gravar...' : 'Confirmar'}
+                                            <button type="submit" disabled={loading || selection.phone.length < 10 || !selection.name} className="w-full py-5 btn-primary rounded-3xl shadow-xl">
+                                                {loading ? 'A Gravar...' : 'Confirmar Reserva'}
                                             </button>
                                         </form>
                                     )}
@@ -335,7 +358,7 @@
                                             <Icon name="check-circle" size={64} className="text-green-500 mx-auto mb-6 shadow-lg" />
                                             <h2 className="text-3xl font-black uppercase italic mb-8 tracking-tighter text-white">Marcado!</h2>
                                             <button onClick={() => {
-                                                const msg = `Olá! Agendei um ${selection.service.name} na Don Barber para o dia ${selection.date} às ${selection.time}. Nome: ${selection.name}`;
+                                                const msg = `Olá! Marquei um ${selection.service.name} na Don Barber para o dia ${selection.date} às ${selection.time}. Nome: ${selection.name}`;
                                                 window.open(`https://wa.me/${WHATSAPP_BARBEARIA}?text=${encodeURIComponent(msg)}`, '_blank');
                                             }} className="w-full py-5 bg-[#25D366] text-white font-black rounded-3xl flex items-center justify-center gap-3 shadow-xl active:scale-95 transition-all">
                                                 <Icon name="message-circle" /> NOTIFICAR BARBEIRO
@@ -349,14 +372,14 @@
                             /* PAINEL STAFF */
                             <div className="fade-in space-y-6">
                                 <div className="flex bg-zinc-800 p-1.5 rounded-2xl border border-zinc-700 mb-6 shadow-xl">
-                                    <button onClick={() => setAdminTab('agenda')} className={`flex-1 py-3 rounded-xl font-black text-[10px] uppercase transition-all ${adminTab === 'agenda' ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/20' : 'text-zinc-500'}`}>Agenda</button>
-                                    <button onClick={() => setAdminTab('config')} className={`flex-1 py-3 rounded-xl font-black text-[10px] uppercase transition-all ${adminTab === 'config' ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/20' : 'text-zinc-500'}`}>Gestão</button>
+                                    <button onClick={() => setAdminTab('agenda')} className={`flex-1 py-3 rounded-xl font-black text-[10px] uppercase transition-all ${adminTab === 'agenda' ? 'bg-amber-500 text-black shadow-lg' : 'text-zinc-500'}`}>Agenda</button>
+                                    <button onClick={() => setAdminTab('config')} className={`flex-1 py-3 rounded-xl font-black text-[10px] uppercase transition-all ${adminTab === 'config' ? 'bg-amber-500 text-black shadow-lg' : 'text-zinc-500'}`}>Serviços</button>
                                 </div>
 
                                 {adminTab === 'agenda' ? (
                                     <div className="space-y-4">
                                         {bookings.length === 0 ? (
-                                            <p className="text-center py-20 text-zinc-600 font-bold italic uppercase tracking-widest opacity-30">Sem agendamentos</p>
+                                            <p className="text-center py-20 text-zinc-600 font-bold italic uppercase tracking-widest opacity-30">Sem marcações</p>
                                         ) : bookings.map(b => (
                                             <div key={b.id} className="bg-zinc-900/80 p-5 rounded-[2rem] border border-zinc-800 flex items-center justify-between shadow-lg group hover:border-amber-500/30 transition-all">
                                                 <div className="flex items-center gap-4">
@@ -393,11 +416,11 @@
                                             <h3 className="text-[10px] font-black text-zinc-500 uppercase tracking-widest px-4 italic">Novo Serviço</h3>
                                             <div className="bg-zinc-900/80 p-6 rounded-[2.5rem] border border-zinc-800 space-y-3 shadow-2xl">
                                                 <input placeholder="Ex: Corte Degradê" className="w-full bg-zinc-800 p-4 rounded-2xl outline-none border border-zinc-700 text-white text-sm focus:border-amber-500" value={newService.name} onChange={e => setNewService({...newService, name: e.target.value})} />
-                                                <div className="flex gap-2">
-                                                    <input placeholder="Preço (R$)" className="flex-1 bg-zinc-800 p-4 rounded-2xl outline-none border border-zinc-700 text-white text-sm focus:border-amber-500" value={newService.price} onChange={e => setNewService({...newService, price: e.target.value})} />
-                                                    <input placeholder="Duração" className="flex-1 bg-zinc-800 p-4 rounded-2xl outline-none border border-zinc-700 text-white text-sm focus:border-amber-500" value={newService.duration} onChange={e => setNewService({...newService, duration: e.target.value})} />
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <input placeholder="Preço (R$)" className="w-full bg-zinc-800 p-4 rounded-2xl outline-none border border-zinc-700 text-white text-sm focus:border-amber-500" value={newService.price} onChange={e => setNewService({...newService, price: e.target.value})} />
+                                                    <input placeholder="Duração" className="w-full bg-zinc-800 p-4 rounded-2xl outline-none border border-zinc-700 text-white text-sm focus:border-amber-500" value={newService.duration} onChange={e => setNewService({...newService, duration: e.target.value})} />
                                                 </div>
-                                                <button onClick={addService} className="w-full py-4 bg-white text-black font-black rounded-2xl uppercase text-[10px] tracking-widest active:scale-95 transition-all hover:bg-amber-500">Salvar Serviço</button>
+                                                <button onClick={addService} className="w-full py-4 bg-white text-black font-black rounded-2xl uppercase text-[10px] tracking-widest active:scale-95 transition-all hover:bg-amber-500">Adicionar Serviço</button>
                                             </div>
                                             
                                             <div className="grid gap-2">
