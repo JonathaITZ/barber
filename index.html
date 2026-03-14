@@ -6,11 +6,19 @@
     <title>Don Barber - Premium Grooming</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: { extend: { colors: { brand: '#0f172a' } } }
+        }
+    </script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&family=Roboto+Slab:wght@700;900&display=swap');
@@ -19,13 +27,13 @@
             --brand-navy: #0f172a;
             --transition-speed: 0.6s;
             --ease: cubic-bezier(0.23, 1, 0.32, 1);
+            --gold-accent: #d4af37;
         }
 
         body { 
             font-family: 'Inter', sans-serif; 
             -webkit-tap-highlight-color: transparent;
             overflow-x: hidden;
-            transition: background-color 0.5s var(--ease), color 0.5s var(--ease);
         }
 
         .font-logo { font-family: 'Roboto Slab', serif; }
@@ -34,6 +42,7 @@
         /* Slider Horizontal de Passos */
         .step-container {
             display: flex;
+            flex-wrap: nowrap;
             transition: transform var(--transition-speed) var(--ease);
             width: 500%; 
         }
@@ -62,22 +71,11 @@
             100% { transform: rotate(0deg) scale(1); opacity: 1; }
         }
 
-        /* Estilos Glassmorphism */
-        .glass-dark {
-            background: rgba(15, 23, 42, 0.85);
-            backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-        }
-        .glass-light {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(16px);
-            border: 1px solid rgba(15, 23, 42, 0.05);
-            box-shadow: 0 10px 30px -10px rgba(15, 23, 42, 0.1);
-        }
 
-        input[type="date"]::-webkit-calendar-picker-indicator,
-        input[type="time"]::-webkit-calendar-picker-indicator { 
-            filter: var(--calendar-filter); 
+        /* Ajuste nativo para inputs de data/hora no modo dark */
+        .dark input[type="date"]::-webkit-calendar-picker-indicator,
+        .dark input[type="time"]::-webkit-calendar-picker-indicator {
+            filter: invert(1);
         }
 
         /* Toggle Switch Estilizado */
@@ -93,9 +91,13 @@
         }
         input:checked + .slider-toggle { background-color: #0f172a; }
         input:checked + .slider-toggle:before { transform: translateX(22px); }
+
+        /* Animação de Interação em Inputs */
+        .input-animate { transition: transform 0.4s var(--ease); }
+        .input-animate:focus-within { transform: translateY(-6px); }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-900">
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-200 transition-colors duration-500">
     <div id="root"></div>
 
     <script type="text/babel" data-type="module">
@@ -131,7 +133,14 @@
                 openTime: '09:00', 
                 closeTime: '19:00', 
                 isManualClosed: false, 
-                whatsapp: '' 
+                whatsapp: '',
+                logo: '',
+                shopName: 'Don Barber',
+                description: 'Navy Standard',
+                lunchStartTime: '', 
+                facebookLink: '',
+                instagramLink: '',
+                prepTime: 0
             });
             
             const [pinInput, setPinInput] = useState('');
@@ -163,22 +172,95 @@
                 return () => client.removeChannel(channel);
             }, [fetchData]);
 
+            // Função para manter a conexão com o Supabase ativa
+            const keepAlive = async () => {
+                try {
+                    await client.from('keep_alive').insert([{}]);
+                    console.log('Keep-alive sent to Supabase');
+                } catch (error) {
+                    console.error('Error sending keep-alive:', error);
+                }
+            };
+
             useEffect(() => {
-                document.body.style.backgroundColor = isDarkMode ? "#020617" : "#f8fafc";
-                document.body.style.color = isDarkMode ? "#f1f5f9" : "#0f172a";
-                document.documentElement.style.setProperty('--calendar-filter', isDarkMode ? 'invert(1)' : 'invert(0)');
+                keepAlive(); // Envia o keep-alive quando o componente é montado
+            }, []);
+
+            useEffect(() => {
+                if (isDarkMode) {
+                    document.documentElement.classList.add('dark');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                }
             }, [isDarkMode]);
 
             const timeSlots = useMemo(() => {
                 const slots = [];
                 const startHour = parseInt((config.openTime || '09:00').split(':')[0]);
                 const endHour = parseInt((config.closeTime || '19:00').split(':')[0]);
+
+                const lunchStart = parseInt((config.lunchStartTime || '12:00').split(':')[0]);
                 
                 for (let i = startHour; i < endHour; i++) {
+                  if (config.lunchStartTime && i === lunchStart) {
+                    // Skip lunch time
+                    continue;
+                  }
                     slots.push(`${i.toString().padStart(2, '0')}:00`);
+                    if (config.prepTime && i < endHour -1 ) {
+                      i = i + config.prepTime;
+                    }
                 }
+
                 return slots;
             }, [config.openTime, config.closeTime]);
+
+            // GSAP ANIMATIONS
+            useEffect(() => {
+                // Animar Serviços (Passo 1)
+                if (view === 'user' && step === 1) {
+                    gsap.fromTo(".service-card", 
+                        { y: 50, opacity: 0, scale: 0.9 },
+                        { y: 0, opacity: 1, scale: 1, duration: 0.6, stagger: 0.08, ease: "back.out(1.2)", clearProps: "all" }
+                    );
+                }
+                // Animar Horários (Passo 3)
+                if (view === 'user' && step === 3) {
+                    gsap.fromTo(".time-slot-card", 
+                        { y: 30, opacity: 0, scale: 0.8 },
+                        { y: 0, opacity: 1, scale: 1, duration: 0.5, stagger: 0.05, ease: "power2.out", delay: 0.2, clearProps: "all" }
+                    );
+                }
+                // Animar Resumo (Passo 4)
+                if (view === 'user' && step === 4) {
+                    gsap.fromTo(".summary-card", 
+                        { y: 20, opacity: 0 },
+                        { y: 0, opacity: 1, duration: 0.6, ease: "power3.out", delay: 0.1 }
+                    );
+                }
+                // Animar Sucesso (Passo 5)
+                if (view === 'user' && step === 5) {
+                    gsap.fromTo(".success-icon", 
+                        { scale: 0, rotation: -180 }, 
+                        { scale: 1, rotation: 0, duration: 1.2, ease: "elastic.out(1, 0.5)" }
+                    );
+                    // Disparar Confetti
+
+              //Animate Socials
+                  gsap.fromTo(".social-media",
+                    { y: 50, opacity: 0, scale: 0.9 },
+                    { y: 0, opacity: 1, scale: 1, duration: 0.6, stagger: 0.08, ease: "back.out(1.2)", clearProps: "all" }
+                  );
+                    confetti({
+                        particleCount: 150,
+                        spread: 70,
+                        origin: { y: 0.6 },
+                        colors: ['#0f172a', '#d4af37', '#cbd5e1']
+                    });
+                }
+            }, [step, view, services, timeSlots]); // Re-executa quando esses mudam
+
+            const progressPercentage = useMemo(() => ((step - 1) / 4) * 100, [step]);
 
             const formatPrice = (price) => {
                 if (!price) return "R$ 0,00";
@@ -190,6 +272,45 @@
                 const ocupados = bookings.filter(b => b.date === date && b.time === time).length;
                 return (Number(config.maxPerSlot) || 2) - ocupados;
             };
+
+      const renderSocialMediaIcons = () => {
+        const socialLinks = [
+          {
+            name: "Facebook",
+            link: config.facebookLink,
+            icon: "facebook",
+          },
+          {
+            name: "Instagram",
+            link: config.instagramLink,
+            icon: "instagram",
+          },
+        ];
+
+        return (
+          <div className="social-media flex justify-center space-x-6 mt-8">
+            {socialLinks.map(
+              (
+                social,
+                index // Add index to uniquely identify each element
+              ) =>
+                social.link ? (
+                  <a
+                    key={index} // Use index as key
+                    href={social.link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 transition-colors duration-300"
+                  >
+                    <Icon name={social.icon} size={24} />
+                  </a>
+                ) : null
+            )}
+          </div>
+        );
+      };
+
+
 
             const totalValue = useMemo(() => {
                 return selection.services.reduce((acc, s) => {
@@ -231,41 +352,51 @@
                 window.open(`https://wa.me/${final}?text=${encodeURIComponent(msg)}`, '_blank');
             };
 
-            const glassClass = isDarkMode ? "glass-dark" : "glass-light";
-            const textContrast = isDarkMode ? "text-white" : "text-slate-950";
-            const subTextContrast = isDarkMode ? "text-slate-400" : "text-slate-500";
-            const accentBtn = isDarkMode ? "bg-white text-slate-950" : "bg-slate-900 text-white";
+            // Classes Utilitárias Reutilizáveis (Lógica Tailwind Nativa)
+            const glassPanel = "bg-white/80 dark:bg-slate-900/60 backdrop-blur-xl border border-slate-200 dark:border-white/10 shadow-xl dark:shadow-none transition-all duration-300";
+            const inputStyle = "w-full p-4 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950/50 outline-none focus:ring-2 focus:ring-slate-900 dark:focus:ring-white/20 transition-all font-bold text-slate-900 dark:text-white placeholder:text-slate-400";
+            const btnPrimary = "bg-slate-900 dark:bg-white text-white dark:text-slate-950 shadow-xl press-effect font-logo uppercase tracking-widest";
 
             return (
-                <div className="min-h-screen max-w-[500px] mx-auto flex flex-col relative overflow-hidden transition-all duration-500 border-x border-slate-200 dark:border-white/5 shadow-2xl">
-                    
+                <div className="min-h-screen w-full bg-slate-100 dark:bg-slate-950 transition-colors duration-500">
+                    <div className="w-full max-w-5xl mx-auto flex flex-col relative bg-slate-50 dark:bg-[#020617] md:my-12 md:rounded-2xl shadow-2xl overflow-hidden min-h-[100dvh] md:min-h-fit">
+                     
                     {/* Cabeçalho */}
-                    <header className={`p-6 backdrop-blur-xl border-b z-50 sticky top-0 transition-all duration-500 ${isDarkMode ? 'bg-slate-900/40 border-white/5' : 'bg-white/60 border-slate-200'}`}>
+                    <header className="px-6 py-4 backdrop-blur-xl border-b border-slate-200 dark:border-white/5 z-50 sticky top-0 bg-white/80 dark:bg-[#020617]/80 transition-all duration-500">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-4">
                                 <div className="relative">
-                                    <div className="w-12 h-12 rounded-full border-2 border-slate-900 dark:border-white bg-white p-1 shadow-sm overflow-hidden flex items-center justify-center">
-                                        <Icon name="scissors" size={24} className="text-slate-900" />
+                                    <div className="w-12 h-12 rounded-full border border-slate-200 dark:border-white/20 bg-white dark:bg-slate-800 p-1 shadow-sm overflow-hidden flex items-center justify-center relative">
+                                        {config.logo ? (
+                                            <img src={config.logo} alt="Logo" className="w-full h-full object-cover rounded-full" onError={(e) => {e.target.style.display='none'; e.target.nextSibling.style.display='flex'}} />
+                                        ) : null}
+                                        <div className={`absolute inset-0 flex items-center justify-center ${config.logo ? 'hidden' : ''}`}>
+                                            <Icon name="scissors" size={24} className="text-slate-900 dark:text-white" />
+                                        </div>
                                     </div>
-                                    <div className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-white dark:border-slate-900 ${config.isManualClosed ? 'bg-red-500' : 'bg-green-500'}`}></div>
+                                    <div className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-white dark:border-slate-900 ${config.isManualClosed ? 'bg-red-500' : 'bg-emerald-500'}`}></div>
                                 </div>
                                 <div>
-                                    <h1 className={`text-xl font-logo uppercase tracking-tighter leading-none ${textContrast}`}>Don <span className="opacity-40">Barber</span></h1>
-                                    <p className={`text-[9px] font-bold uppercase tracking-[0.2em] mt-1.5 ${subTextContrast}`}>
-                                        {config.isManualClosed ? 'Loja Fechada' : 'Navy Standard'}
+                                    <h1 className="text-xl font-logo uppercase tracking-tighter leading-none text-slate-900 dark:text-white whitespace-nowrap">{config.shopName || 'Don Barber'}</h1>
+                                    <p className="text-[9px] font-bold uppercase tracking-[0.2em] mt-1.5 text-slate-500 dark:text-slate-400">
+                                        {config.isManualClosed ? 'Loja Fechada' : (config.description || 'Navy Standard')}
                                     </p>
                                 </div>
                             </div>
 
                             <button 
                                 onClick={() => setIsDarkMode(!isDarkMode)}
-                                className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-all press-effect border ${isDarkMode ? 'bg-slate-800 border-white/10 text-white' : 'bg-white border-slate-200 text-slate-900 shadow-sm'}`}
+                                className="w-11 h-11 rounded-2xl flex items-center justify-center transition-all press-effect border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm"
                             >
                                 <div key={isDarkMode ? 'sun' : 'moon'} className="theme-icon-swap">
                                     <Icon name={isDarkMode ? "sun" : "moon"} size={20} />
                                 </div>
                             </button>
                         </div>
+                        {/* Barra de Progresso */}
+                        {view === 'user' && !config.isManualClosed && (
+                            <div className="h-1 w-full bg-slate-100 dark:bg-slate-800 mt-4 rounded-full overflow-hidden"><div className="h-full bg-slate-900 dark:bg-white transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]" style={{ width: `${progressPercentage}%` }}></div></div>
+                        )}
                     </header>
 
                     <main className="flex-1 flex flex-col overflow-hidden">
@@ -275,13 +406,14 @@
                                 <div className="w-24 h-24 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mb-6 shadow-xl border-2 border-red-500/20">
                                     <Icon name="power-off" size={40} />
                                 </div>
-                                <h2 className={`text-3xl font-logo uppercase italic mb-4 leading-none ${textContrast}`}>Estamos em Pausa</h2>
-                                <p className={`${subTextContrast} text-sm font-medium leading-relaxed italic`}>
+                                <h2 className="text-3xl font-logo uppercase italic mb-4 leading-none text-slate-900 dark:text-white">Estamos em Pausa</h2>
+                                <p className="text-slate-500 dark:text-slate-400 text-sm font-medium leading-relaxed italic">
                                     De momento não estamos a aceitar agendamentos online. Por favor, tente novamente mais tarde ou contacte-nos.
                                 </p>
                                 <button onClick={() => window.open(`https://wa.me/${config.whatsapp}`)} className="mt-10 px-8 py-4 bg-green-500 text-white font-logo rounded-2xl uppercase text-[10px] tracking-widest flex items-center gap-3">
                                     <Icon name="message-circle" /> Contactar Suporte
                                 </button>
+                                  {renderSocialMediaIcons()}
                             </div>
                         ) : view === 'user' ? (
                             <div className="flex-1 overflow-hidden">
@@ -289,56 +421,56 @@
                                     
                                     {/* PASSO 1: SERVIÇOS */}
                                     <div className="step-item p-4">
-                                        <div className={`${glassClass} rounded-[2.5rem] p-6 h-full overflow-y-auto no-scrollbar transition-all`}>
+                                        <div className={`${glassPanel} rounded-[2.5rem] p-6 h-full overflow-y-auto no-scrollbar`}>
                                             <div className="mb-8 px-2">
-                                                <h2 className={`text-2xl font-logo uppercase tracking-tight ${textContrast}`}>Serviços</h2>
-                                                <p className={`${subTextContrast} text-xs font-bold uppercase tracking-widest mt-1`}>O que faremos hoje?</p>
+                                                <h2 className="text-2xl font-logo uppercase tracking-tight text-slate-900 dark:text-white">Serviços</h2>
+                                                <p className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">O que faremos hoje?</p>
                                             </div>
                                             
                                             <div className="grid gap-4 pb-4">
-                                                {services.map(s => {
+                                                {services.map((s, index) => {
                                                     const sel = selection.services.find(i => i.id === s.id);
                                                     return (
                                                         <button key={s.id} onClick={() => {
                                                             setSelection(p => sel ? {...p, services: p.services.filter(i => i.id !== s.id)} : {...p, services: [...p.services, s]});
-                                                        }} className={`w-full flex items-center justify-between p-5 rounded-[1.75rem] border-2 transition-all duration-300 press-effect text-left ${sel ? 'border-slate-950 dark:border-white bg-slate-900/5 dark:bg-white/5' : 'bg-transparent border-slate-100 dark:border-white/5'}`}>
-                                                            <div className="flex items-center gap-4">
-                                                                <div className={`p-3.5 rounded-2xl transition-all duration-300 ${sel ? (isDarkMode ? 'bg-white text-slate-900 shadow-xl' : 'bg-slate-950 text-white shadow-xl') : 'bg-slate-50 dark:bg-slate-800 text-slate-300'}`}><Icon name={sel ? "check" : "plus"} size={18} /></div>
-                                                                <div><p className={`font-bold text-base leading-none tracking-tight ${textContrast}`}>{s.name}</p><p className="text-[10px] text-slate-400 mt-2 font-black uppercase tracking-tighter italic">{s.duration}</p></div>
+                                                        }} className={`service-card w-full flex items-center justify-between p-5 rounded-[1.75rem] border transition-all duration-300 press-effect text-left group gap-4 ${sel ? 'border-slate-900 dark:border-white bg-slate-900/5 dark:bg-white/5' : 'border-transparent bg-slate-50 dark:bg-white/5 hover:border-slate-200 dark:hover:border-white/10'}`}>
+                                                            <div className="flex items-center gap-4 min-w-0">
+                                                                <div className={`p-3.5 rounded-2xl transition-all duration-300 flex-shrink-0 ${sel ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-lg' : 'bg-slate-200 dark:bg-slate-800 text-slate-400'}`}><Icon name={sel ? "check" : "plus"} size={18} /></div>
+                                                                <div className="min-w-0"><p className="font-bold text-base leading-none tracking-tight text-slate-900 dark:text-white truncate">{s.name}</p><p className="text-[10px] text-slate-400 mt-2 font-black uppercase tracking-tighter italic whitespace-nowrap">{s.duration}</p></div>
                                                             </div>
-                                                            <span className={`font-logo text-lg ${textContrast}`}>{formatPrice(s.price)}</span>
+                                                            <span className="font-logo text-lg text-slate-900 dark:text-white whitespace-nowrap flex-shrink-0">{formatPrice(s.price)}</span>
                                                         </button>
                                                     );
                                                 })}
                                             </div>
                                             {selection.services.length > 0 && (
-                                                <button onClick={() => setStep(2)} className={`w-full py-5 ${accentBtn} font-logo rounded-[1.5rem] mt-4 shadow-2xl press-effect uppercase text-sm tracking-widest italic transition-all`}>Seguinte (R$ {totalValue.toFixed(2)})</button>
+                                                <button onClick={() => setStep(2)} className={`w-full py-5 rounded-[1.5rem] mt-4 ${btnPrimary}`}>Seguinte (R$ {totalValue.toFixed(2)})</button>
                                             )}
                                         </div>
                                     </div>
 
                                     {/* PASSO 2: DATA */}
                                     <div className="step-item p-4">
-                                        <div className={`${glassClass} rounded-[2.5rem] p-10 text-center h-full flex flex-col justify-center transition-all border-2 border-slate-950/5 dark:border-white/5`}>
-                                            <div className="w-16 h-16 bg-slate-950/5 dark:bg-white/10 text-slate-950 dark:text-white rounded-3xl flex items-center justify-center mx-auto mb-8 border border-slate-950/10 dark:border-white/20"><Icon name="calendar" size={30} /></div>
-                                            <h2 className={`text-2xl font-logo uppercase mb-8 ${textContrast}`}>Data da Reserva</h2>
-                                            <input type="date" min={new Date().toISOString().split('T')[0]} className={`w-full p-6 rounded-[1.5rem] border-2 font-logo text-xl text-center [color-scheme:dark] mb-10 transition-all ${isDarkMode ? 'bg-slate-800 border-white/10 text-white' : 'bg-white border-slate-200 text-slate-950 shadow-inner'}`} onChange={e => setSelection({...selection, date: e.target.value})} />
-                                            <button onClick={() => setStep(3)} disabled={!selection.date} className={`w-full py-5 ${accentBtn} font-logo rounded-[1.5rem] shadow-xl press-effect uppercase tracking-widest`}>Ver Horários</button>
+                                        <div className={`${glassPanel} rounded-[2.5rem] p-10 text-center h-full flex flex-col justify-center`}>
+                                            <div className="w-16 h-16 bg-slate-100 dark:bg-white/10 text-slate-900 dark:text-white rounded-3xl flex items-center justify-center mx-auto mb-8 border border-slate-200 dark:border-white/20"><Icon name="calendar" size={30} /></div>
+                                            <h2 className="text-2xl font-logo uppercase mb-8 text-slate-900 dark:text-white">Data da Reserva</h2>
+                                            <input type="date" min={new Date().toISOString().split('T')[0]} className={`${inputStyle} text-center text-xl mb-10`} onChange={e => setSelection({...selection, date: e.target.value})} />
+                                            <button onClick={() => setStep(3)} disabled={!selection.date} className={`w-full py-5 rounded-[1.5rem] ${btnPrimary}`}>Ver Horários</button>
                                             <button onClick={() => setStep(1)} className="mt-8 text-slate-400 font-black uppercase text-[10px] tracking-[0.3em] hover:text-slate-950 transition-colors italic">Alterar Menu</button>
                                         </div>
                                     </div>
 
                                     {/* PASSO 3: HORÁRIOS DINÂMICOS */}
                                     <div className="step-item p-4">
-                                        <div className={`${glassClass} rounded-[2.5rem] p-6 h-full overflow-y-auto no-scrollbar transition-all`}>
-                                            <h2 className={`text-xl font-logo uppercase mb-8 text-center tracking-tight ${textContrast}`}>Janelas Disponíveis</h2>
-                                            <div className="grid grid-cols-2 gap-4 pb-10">
-                                                {timeSlots.map(t => {
+                                        <div className={`${glassPanel} rounded-[2.5rem] p-6 h-full overflow-y-auto no-scrollbar`}>
+                                            <h2 className="text-xl font-logo uppercase mb-8 text-center tracking-tight text-slate-900 dark:text-white">Janelas Disponíveis</h2>
+                                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 pb-10">
+                                                {timeSlots.map((t, i) => {
                                                     const v = getVagasDisponiveis(selection.date, t);
                                                     const off = v <= 0;
                                                     return (
-                                                        <button key={t} disabled={off} onClick={() => {setSelection({...selection, time: t}); setStep(4)}} 
-                                                            className={`py-6 rounded-[1.5rem] border-2 font-logo text-lg relative transition-all press-effect ${off ? 'bg-slate-100 dark:bg-slate-900 border-slate-200 dark:border-white/5 text-slate-300 opacity-40 shadow-inner' : (isDarkMode ? 'bg-slate-800/80 border-transparent text-white active:bg-white active:text-slate-900' : 'bg-white border-slate-100 text-slate-900 active:bg-slate-950 active:text-white shadow-sm')}`}>
+                                                        <button key={t} disabled={off} onClick={() => {setSelection({...selection, time: t}); setStep(4)}}
+                                                            className={`time-slot-card py-6 rounded-[1.5rem] border font-logo text-lg relative transition-all press-effect ${off ? 'bg-slate-100 dark:bg-slate-900/50 border-slate-200 dark:border-white/5 text-slate-300 opacity-40' : 'bg-white dark:bg-white/5 border-slate-100 dark:border-white/5 text-slate-900 dark:text-white hover:border-slate-300 dark:hover:border-white/20 active:scale-95'}`}>
                                                             {t} {!off && <span className="absolute top-1.5 right-3 text-[7px] text-slate-400 font-black uppercase tracking-widest">{v} Vagas</span>}
                                                         </button>
                                                     );
@@ -350,31 +482,31 @@
 
                                     {/* PASSO 4: FORMULÁRIO */}
                                     <div className="step-item p-4">
-                                        <div className={`${glassClass} rounded-[2.5rem] p-8 space-y-8 h-full overflow-y-auto no-scrollbar transition-all`}>
-                                            <h2 className={`text-2xl font-logo uppercase ${textContrast}`}>Dados Finais</h2>
-                                            <div className="space-y-6">
-                                                <div className="space-y-2">
-                                                    <label className={`text-[10px] font-black uppercase px-4 tracking-[0.2em] ${subTextContrast}`}>Nome Completo</label>
-                                                    <input required placeholder="Quem atendemos?" className={`w-full p-5 rounded-[1.5rem] border-2 outline-none focus:border-slate-950 dark:focus:border-white font-bold transition-all ${isDarkMode ? 'bg-slate-800 border-white/5 text-white' : 'bg-slate-50 border-slate-100 text-slate-950 shadow-inner'}`} onChange={e => setSelection({...selection, name: e.target.value})} />
+                                        <div className={`${glassPanel} summary-card rounded-[2.5rem] p-8 space-y-8 h-full overflow-y-auto no-scrollbar mx-auto`}>
+                                            <h2 className="text-2xl font-logo uppercase text-slate-900 dark:text-white text-center">Dados Finais</h2>
+                                            <div className="space-y-6 max-w-lg mx-auto">
+                                                <div className="space-y-2 input-animate">
+                                                    <label className="text-[10px] font-black uppercase px-4 tracking-[0.2em] text-slate-500 dark:text-slate-400">Nome Completo</label>
+                                                    <input required placeholder="Quem atendemos?" className={`${inputStyle} p-5 rounded-[1.5rem]`} onChange={e => setSelection({...selection, name: e.target.value})} />
                                                 </div>
-                                                <div className="space-y-2">
-                                                    <label className={`text-[10px] font-black uppercase px-4 tracking-[0.2em] ${subTextContrast}`}>WhatsApp (DDD + N°)</label>
-                                                    <input required type="tel" placeholder="83 99999-9999" className={`w-full p-5 rounded-[1.5rem] border-2 outline-none focus:border-slate-950 dark:focus:border-white font-bold transition-all ${isDarkMode ? 'bg-slate-800 border-white/5 text-white' : 'bg-slate-50 border-slate-100 text-slate-950 shadow-inner'}`} value={selection.phone} onChange={e => setSelection({...selection, phone: e.target.value.replace(/\D/g, '').slice(0,11)})} />
+                                                <div className="space-y-2 input-animate">
+                                                    <label className="text-[10px] font-black uppercase px-4 tracking-[0.2em] text-slate-500 dark:text-slate-400">WhatsApp (DDD + N°)</label>
+                                                    <input required type="tel" placeholder="83 99999-9999" className={`${inputStyle} p-5 rounded-[1.5rem]`} value={selection.phone} onChange={e => setSelection({...selection, phone: e.target.value.replace(/\D/g, '').slice(0,11)})} />
                                                 </div>
                                             </div>
-                                            <button onClick={handleBooking} disabled={loading || selection.phone.length < 10 || !selection.name} className={`w-full py-5 ${accentBtn} font-logo rounded-[1.5rem] shadow-2xl press-effect uppercase tracking-widest italic transition-all`}>Validar Agendamento</button>
+                                            <button onClick={handleBooking} disabled={loading || selection.phone.length < 10 || !selection.name} className={`w-full max-w-lg mx-auto py-5 rounded-[1.5rem] ${btnPrimary} flex items-center justify-center`}>Validar Agendamento</button>
                                         </div>
                                     </div>
 
                                     {/* PASSO 5: SUCESSO */}
                                     <div className="step-item p-4">
-                                        <div className={`${glassClass} rounded-[2.5rem] p-10 text-center h-full flex flex-col justify-center items-center transition-all border-2 border-slate-950/10 dark:border-white/5`}>
+                                        <div className={`${glassPanel} rounded-[2.5rem] p-10 text-center h-full flex flex-col justify-center items-center`}>
                                             <div className="relative mb-10">
-                                                <div className={`w-24 h-24 rounded-full flex items-center justify-center shadow-xl border-4 ${isDarkMode ? 'bg-green-500 border-slate-900' : 'bg-green-500 border-white'}`}><Icon name="check" size={48} className="text-white" /></div>
-                                                <div className="absolute -inset-4 bg-green-500/10 blur-2xl rounded-full -z-10"></div>
+                                                <div className="success-icon w-24 h-24 rounded-full flex items-center justify-center shadow-xl border-4 border-white dark:border-slate-800 bg-emerald-500"><Icon name="check" size={48} className="text-white" /></div>
+                                                <div className="absolute -inset-4 bg-emerald-500/20 blur-2xl rounded-full -z-10"></div>
                                             </div>
-                                            <h2 className={`text-3xl font-logo uppercase mb-3 tracking-tighter leading-none ${textContrast}`}>Reservado!</h2>
-                                            <p className={`${subTextContrast} text-sm mb-12 max-w-[220px] font-medium leading-relaxed italic`}>O teu lugar na cadeira está garantido. Estaremos à tua espera.</p>
+                                            <h2 className="text-3xl font-logo uppercase mb-3 tracking-tighter leading-none text-slate-900 dark:text-white">Reservado!</h2>
+                                            <p className="text-slate-500 dark:text-slate-400 text-sm mb-12 max-w-[220px] font-medium leading-relaxed italic">O teu lugar na cadeira está garantido. Estaremos à tua espera.</p>
                                             <button onClick={sendWhatsApp} className="w-full py-5 bg-[#128C7E] text-white font-logo rounded-[1.5rem] shadow-xl press-effect flex items-center justify-center gap-3 tracking-widest uppercase italic">
                                                 <Icon name="message-circle" /> Confirmar no WhatsApp
                                             </button>
@@ -386,26 +518,26 @@
                         ) : (
                             /* PAINEL STAFF RESPONSIVO */
                             <div className="flex-1 p-6 overflow-y-auto no-scrollbar fade-in space-y-8 pb-24">
-                                <div className={`flex p-1.5 rounded-[1.5rem] border shadow-inner transition-all ${isDarkMode ? 'bg-slate-900/60 border-white/5' : 'bg-slate-100 border-slate-200'}`}>
+                                <div className="flex p-1.5 rounded-[1.5rem] border border-slate-200 dark:border-white/5 bg-slate-100 dark:bg-slate-900/60 shadow-inner">
                                     {['agenda', 'servicos', 'loja'].map(t => (
-                                        <button key={t} onClick={() => setAdminTab(t)} className={`flex-1 py-3 rounded-xl font-logo text-[10px] uppercase transition-all duration-300 ${adminTab === t ? (isDarkMode ? 'bg-white text-slate-950 shadow-lg' : 'bg-slate-950 text-white shadow-lg') : isDarkMode ? 'text-slate-600' : 'text-slate-400'}`}>
+                                        <button key={t} onClick={() => setAdminTab(t)} className={`flex-1 py-3 rounded-xl font-logo text-[10px] uppercase transition-all duration-300 ${adminTab === t ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-950 shadow-lg' : 'text-slate-400 dark:text-slate-500'}`}>
                                             {t === 'loja' ? 'Gestão' : t}
                                         </button>
                                     ))}
                                 </div>
 
                                 {adminTab === 'loja' && (
-                                    <div className="space-y-6 animate-in slide-in-from-bottom-4">
+                                    <div className="space-y-6 md:space-y-0 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-6 animate-in slide-in-from-bottom-4">
                                         {/* CONTROLO DE ABERTURA E FECHO MANUAL */}
-                                        <div className={`${glassClass} p-8 rounded-[2.5rem] border-2 ${config.isManualClosed ? 'border-red-500/30' : 'border-green-500/30'}`}>
-                                            <div className="flex items-center justify-between mb-4">
-                                                <div>
-                                                    <h3 className={`text-sm font-logo uppercase tracking-tight ${textContrast}`}>Status da Barbearia</h3>
-                                                    <p className={`text-[10px] font-black uppercase italic ${config.isManualClosed ? 'text-red-500' : 'text-green-500'}`}>
+                                        <div className={`${glassPanel} p-8 rounded-[2.5rem] border-2 ${config.isManualClosed ? 'border-red-500/30' : 'border-emerald-500/30'}`}>
+                                            <div className="flex items-center justify-between mb-4 gap-4">
+                                                <div className="min-w-0">
+                                                    <h3 className="text-sm font-logo uppercase tracking-tight text-slate-900 dark:text-white truncate">Status da Barbearia</h3>
+                                                    <p className={`text-[10px] font-black uppercase italic ${config.isManualClosed ? 'text-red-500' : 'text-emerald-500'}`}>
                                                         {config.isManualClosed ? 'Loja Fechada Manualmente' : 'Loja Operacional'}
                                                     </p>
                                                 </div>
-                                                <label className="switch">
+                                                <label className="switch flex-shrink-0">
                                                     <input type="checkbox" checked={!config.isManualClosed} onChange={e => updateSettings({ isManualClosed: !e.target.checked })} />
                                                     <span className="slider-toggle"></span>
                                                 </label>
@@ -416,48 +548,110 @@
                                         </div>
 
                                         {/* HORÁRIOS DE FUNCIONAMENTO */}
-                                        <div className={`${glassClass} p-8 rounded-[2.5rem] space-y-6 shadow-xl`}>
+                                        <div className={`${glassPanel} p-8 rounded-[2.5rem] space-y-6`}>
                                             <div className="flex items-center gap-3 px-2">
                                                 <Icon name="clock" size={18} className="text-slate-950 dark:text-white" />
-                                                <h3 className={`text-[11px] font-logo uppercase tracking-widest ${textContrast}`}>Janela de Atendimento</h3>
+                                                <h3 className="text-[11px] font-logo uppercase tracking-widest text-slate-900 dark:text-white">Janela de Atendimento</h3>
                                             </div>
                                             <div className="grid grid-cols-2 gap-6">
-                                                <div className="space-y-2">
+                                                <div className="space-y-2 input-animate">
                                                     <label className="text-[8px] font-black text-slate-400 uppercase px-4 tracking-[0.2em]">Início</label>
-                                                    <input type="time" className={`w-full p-4 rounded-2xl border-2 font-logo text-lg [color-scheme:dark] outline-none transition-all ${isDarkMode ? 'bg-slate-800 border-white/5 text-white' : 'bg-white border-slate-200 text-slate-950'}`} value={config.openTime || '09:00'} onChange={e => updateSettings({ openTime: e.target.value })} />
+                                                    <input type="time" className={`${inputStyle} p-4 text-lg`} value={config.openTime || '09:00'} onChange={e => updateSettings({ openTime: e.target.value })} />
                                                 </div>
-                                                <div className="space-y-2">
+                                                <div className="space-y-2 input-animate">
                                                     <label className="text-[8px] font-black text-slate-400 uppercase px-4 tracking-[0.2em]">Fim</label>
-                                                    <input type="time" className={`w-full p-4 rounded-2xl border-2 font-logo text-lg [color-scheme:dark] outline-none transition-all ${isDarkMode ? 'bg-slate-800 border-white/5 text-white' : 'bg-white border-slate-200 text-slate-950'}`} value={config.closeTime || '19:00'} onChange={e => updateSettings({ closeTime: e.target.value })} />
+                                                    <input type="time" className={`${inputStyle} p-4 text-lg`} value={config.closeTime || '19:00'} onChange={e => updateSettings({ closeTime: e.target.value })} />
                                                 </div>
                                             </div>
                                             <p className="text-[8px] text-slate-400 font-bold uppercase italic text-center">Os horários para o cliente serão gerados entre este intervalo.</p>
                                         </div>
 
-                                        <div className={`${glassClass} p-8 rounded-[2.5rem] space-y-5 shadow-lg`}>
-                                            <div className="flex justify-between items-center"><p className={`font-logo uppercase text-[11px] ${textContrast}`}>Cadeiras Simultâneas</p><span className={`text-4xl font-logo leading-none ${textContrast}`}>{config.maxPerSlot}</span></div>
+                                        <div className={`${glassPanel} p-8 rounded-[2.5rem] space-y-5`}>
+                                            <div className="flex justify-between items-center"><p className="font-logo uppercase text-[11px] text-slate-900 dark:text-white">Cadeiras Simultâneas</p><span className="text-4xl font-logo leading-none text-slate-900 dark:text-white">{config.maxPerSlot}</span></div>
                                             <input type="range" min="1" max="10" value={config.maxPerSlot} onChange={e => updateSettings({ maxPerSlot: parseInt(e.target.value) })} className="w-full accent-slate-950 dark:accent-white" />
                                         </div>
 
-                                        <div className={`${glassClass} p-8 rounded-[2.5rem] space-y-4 shadow-xl`}>
+                                        <div className={`${glassPanel} p-8 rounded-[2.5rem] space-y-4 input-animate`}>
+                                            <div className="flex items-center gap-3 px-2">
+                                                <Icon name="type" size={18} className="text-slate-950 dark:text-white" />
+                                                <h3 className="text-[11px] font-logo uppercase tracking-widest text-slate-900 dark:text-white">Nome do Estabelecimento</h3>
+                                            </div>
+                                            <input placeholder="Ex: Don Barber" className={`${inputStyle} p-5 rounded-[1.5rem] text-lg`} value={config.shopName || ''} onChange={e => updateSettings({ shopName: e.target.value })} />
+                                        </div>
+
+                  <div className={`${glassPanel} p-8 rounded-[2.5rem] space-y-4 input-animate`}>
+                    <div className="flex items-center gap-3 px-2">
+                      <Icon name="facebook" size={18} className="text-slate-950 dark:text-white" />
+                      <h3 className="text-[11px] font-logo uppercase tracking-widest text-slate-900 dark:text-white">Facebook Link</h3>
+                    </div>
+                    <input placeholder="https://facebook.com/..." className={`${inputStyle} p-5 rounded-[1.5rem] text-sm`} value={config.facebookLink || ''} onChange={e => updateSettings({ facebookLink: e.target.value })} />
+                  </div>
+
+                  <div className={`${glassPanel} p-8 rounded-[2.5rem] space-y-4 input-animate`}>
+                    <div className="flex items-center gap-3 px-2">
+                      <Icon name="instagram" size={18} className="text-slate-950 dark:text-white" />
+                      <h3 className="text-[11px] font-logo uppercase tracking-widest text-slate-900 dark:text-white">Instagram Link</h3>
+                    </div>
+                    <input placeholder="https://instagram.com/..." className={`${inputStyle} p-5 rounded-[1.5rem] text-sm`} value={config.instagramLink || ''} onChange={e => updateSettings({ instagramLink: e.target.value })} />
+                  </div>
+
+
+                                        <div className={`${glassPanel} p-8 rounded-[2.5rem] space-y-4 input-animate`}>
+                                            <div className="flex items-center gap-3 px-2">
+                                                <Icon name="align-left" size={18} className="text-slate-950 dark:text-white" />
+                                                <h3 className="text-[11px] font-logo uppercase tracking-widest text-slate-900 dark:text-white">Descrição / Slogan</h3>
+                                            </div>
+                                            <input placeholder="Ex: Navy Standard" className={`${inputStyle} p-5 rounded-[1.5rem] text-sm`} value={config.description || ''} onChange={e => updateSettings({ description: e.target.value })} />
+                                        </div>
+
+                                        <div className={`${glassPanel} p-8 rounded-[2.5rem] space-y-4 input-animate`}>
+                                            <div className="flex items-center gap-3 px-2">
+                                                <Icon name="coffee" size={18} className="text-slate-950 dark:text-white" />
+                                                <h3 className="text-[11px] font-logo uppercase tracking-widest text-slate-900 dark:text-white">Horário de Almoço</h3>
+                                            </div>
+                                            <input type="time" className={`${inputStyle} p-5 rounded-[1.5rem] text-lg`} value={config.lunchStartTime || ''} onChange={e => updateSettings({ lunchStartTime: e.target.value })} />
+                                        </div>
+
+                                        <div className={`${glassPanel} p-8 rounded-[2.5rem] space-y-5`}>
+                                            <div className="flex justify-between items-center">
+                                              <div className="flex items-center gap-3 px-2">
+                                                <Icon name="clock" size={18} className="text-slate-950 dark:text-white" />
+                                                <h3 className="text-[11px] font-logo uppercase tracking-widest text-slate-900 dark:text-white">Tempo de Preparação (Entre)</h3>
+                                              </div>
+                                              <span className="text-4xl font-logo leading-none text-slate-900 dark:text-white">{config.prepTime}</span>
+                                            </div>
+                                            
+                                            <input type="range" min="0" max="1" step="1" value={config.prepTime} onChange={e => updateSettings({ prepTime: parseInt(e.target.value) })} className="w-full accent-slate-950 dark:accent-white" />
+                                            <p className="text-[8px] text-slate-400 font-bold uppercase italic text-center">Tempo adicional entre agendamentos (em horas).</p>
+                                        </div>
+
+                                        <div className={`${glassPanel} p-8 rounded-[2.5rem] space-y-4 input-animate`}>
+                                            <div className="flex items-center gap-3 px-2">
+                                                <Icon name="image" size={18} className="text-slate-950 dark:text-white" />
+                                                <h3 className="text-[11px] font-logo uppercase tracking-widest text-slate-900 dark:text-white">Logo (URL da Imagem)</h3>
+                                            </div>
+                                            <input placeholder="https://..." className={`${inputStyle} p-5 rounded-[1.5rem] text-sm`} value={config.logo || ''} onChange={e => updateSettings({ logo: e.target.value })} />
+                                        </div>
+
+                                        <div className={`${glassPanel} p-8 rounded-[2.5rem] space-y-4 input-animate`}>
                                             <div className="flex items-center gap-3 px-2">
                                                 <Icon name="phone" size={18} className="text-slate-950 dark:text-white" />
-                                                <h3 className={`text-[11px] font-logo uppercase tracking-widest ${textContrast}`}>WhatsApp Barbearia</h3>
+                                                <h3 className="text-[11px] font-logo uppercase tracking-widest text-slate-900 dark:text-white">WhatsApp Barbearia</h3>
                                             </div>
-                                            <input className={`w-full p-5 rounded-[1.5rem] border-2 font-logo text-lg ${isDarkMode ? 'bg-slate-800 border-white/5 text-white' : 'bg-white border-slate-100 text-slate-950 shadow-inner'}`} value={config.whatsapp} onChange={e => updateSettings({ whatsapp: e.target.value.replace(/\D/g, '') })} />
+                                            <input className={`${inputStyle} p-5 rounded-[1.5rem] text-lg`} value={config.whatsapp} onChange={e => updateSettings({ whatsapp: e.target.value.replace(/\D/g, '') })} />
                                         </div>
                                     </div>
                                 )}
 
                                 {adminTab === 'agenda' && (
                                     <div className="space-y-4">
-                                        <h2 className={`text-xl font-logo uppercase tracking-tight ${textContrast} px-2`}>Fluxo de Hoje</h2>
+                                        <h2 className="text-xl font-logo uppercase tracking-tight text-slate-900 dark:text-white px-2 mx-auto max-w-xl">Fluxo de Hoje</h2>
                                         {bookings.length === 0 ? <p className="text-center py-20 opacity-20 italic">Sem reservas até agora.</p> : 
-                                            bookings.map(b => (
-                                                <div key={b.id} className={`${glassClass} p-6 rounded-[2rem] flex items-center justify-between shadow-lg`}>
+                                            bookings.map((b, i) => (
+                                                <div key={b.id} className={`${glassPanel} booking-item p-6 rounded-[2rem] flex items-center justify-between`}>
                                                     <div className="flex items-center gap-5">
-                                                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-logo text-xl border-2 ${isDarkMode ? 'bg-slate-800 border-white/10 text-white' : 'bg-white border-slate-200 text-slate-950'}`}>{b.time?.split(':')[0]}</div>
-                                                        <div><p className={`font-bold uppercase text-sm ${textContrast}`}>{b.name}</p><p className={`${subTextContrast} text-[10px] italic`}>{b.date} • {b.time}</p></div>
+                                                        <div className="w-12 h-12 rounded-2xl flex items-center justify-center font-logo text-xl border bg-white dark:bg-slate-800 border-slate-200 dark:border-white/10 text-slate-900 dark:text-white">{b.time?.split(':')[0]}</div>
+                                                        <div className="min-w-0"><p className="font-bold uppercase text-sm text-slate-900 dark:text-white truncate">{b.name}</p><p className="text-slate-500 dark:text-slate-400 text-[10px] italic whitespace-nowrap">{b.date} • {b.time}</p></div>
                                                     </div>
                                                     <button onClick={() => deleteBooking(b.id)} className="p-3 bg-red-500/10 text-red-500 rounded-2xl"><Icon name="trash-2" size={16}/></button>
                                                 </div>
@@ -467,21 +661,23 @@
                                 )}
 
                                 {adminTab === 'servicos' && (
-                                    <div className="space-y-6">
-                                        <div className={`${glassClass} p-7 rounded-[2.5rem] space-y-4 shadow-xl`}>
-                                            <h3 className={`text-[10px] font-black uppercase px-2 tracking-widest italic ${subTextContrast}`}>+ Novo Serviço</h3>
-                                            <input placeholder="Ex: Degradê Navalhado" className={`w-full p-4 rounded-2xl border-2 text-sm outline-none focus:border-slate-900 dark:focus:border-white font-bold transition-all ${isDarkMode ? 'bg-slate-800 border-white/5 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'}`} value={newService.name} onChange={e => setNewService({...newService, name: e.target.value})} />
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <input placeholder="R$ 45" className={`w-full p-4 rounded-2xl border-2 text-sm outline-none ${isDarkMode ? 'bg-slate-800 border-white/5 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'}`} value={newService.price} onChange={e => setNewService({...newService, price: e.target.value})} />
-                                                <input placeholder="40 min" className={`w-full p-4 rounded-2xl border-2 text-sm outline-none ${isDarkMode ? 'bg-slate-800 border-white/5 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'}`} value={newService.duration} onChange={e => setNewService({...newService, duration: e.target.value})} />
+                                    <div className="space-y-6 md:space-y-0 md:grid md:grid-cols-3 md:gap-8">
+                                        <div className="md:col-span-1 mx-auto max-w-xl">
+                                            <div className={`${glassPanel} p-7 rounded-[2.5rem] space-y-4`}>
+                                                <h3 className="text-[10px] font-black uppercase px-2 tracking-widest italic text-slate-500 dark:text-slate-400">+ Novo Serviço</h3>
+                                                <div className="input-animate"><input placeholder="Ex: Degradê Navalhado" className={`${inputStyle} p-4 text-sm`} value={newService.name} onChange={e => setNewService({...newService, name: e.target.value})} /></div>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div className="input-animate"><input placeholder="R$ 45" className={`${inputStyle} p-4 text-sm`} value={newService.price} onChange={e => setNewService({...newService, price: e.target.value})} /></div>
+                                                    <div className="input-animate"><input placeholder="40 min" className={`${inputStyle} p-4 text-sm`} value={newService.duration} onChange={e => setNewService({...newService, duration: e.target.value})} /></div>
+                                                </div>
+                                                <button onClick={async () => { if(!newService.name) return; await client.from('services').insert([newService]); fetchData(); setNewService({name:'',price:'',duration:''}); }} className={`w-full py-4 rounded-2xl text-[10px] ${btnPrimary}`}>Gravar Serviço</button>
                                             </div>
-                                            <button onClick={async () => { if(!newService.name) return; await client.from('services').insert([newService]); fetchData(); setNewService({name:'',price:'',duration:''}); }} className={`w-full py-4 ${accentBtn} font-logo rounded-2xl uppercase text-[10px] tracking-widest`}>Gravar Serviço</button>
                                         </div>
-                                        <div className="grid gap-3">
+                                        <div className="md:col-span-2 space-y-3">
                                             {services.map(s => (
-                                                <div key={s.id} className={`${glassClass} p-5 rounded-[1.75rem] flex justify-between items-center px-8 border-l-4 border-slate-950 dark:border-white`}>
-                                                    <div><p className={`font-bold text-sm tracking-tight ${textContrast}`}>{s.name}</p><p className="text-[10px] text-slate-400 font-bold uppercase italic">{s.price}</p></div>
-                                                    <button onClick={async () => { await client.from('services').delete().eq('id', s.id); fetchData(); }} className="p-3 bg-red-500/10 text-red-500 rounded-2xl"><Icon name="trash-2" size={16}/></button>
+                                                <div key={s.id} className={`${glassPanel} p-5 rounded-[1.75rem] flex justify-between items-center px-8 border-l-4 border-l-slate-900 dark:border-l-white gap-4`}>
+                                                    <div className="min-w-0"><p className="font-bold text-sm tracking-tight text-slate-900 dark:text-white truncate">{s.name}</p><p className="text-[10px] text-slate-400 font-bold uppercase italic whitespace-nowrap">{s.price}</p></div>
+                                                    <button onClick={async () => { await client.from('services').delete().eq('id', s.id); fetchData(); }} className="p-3 bg-red-500/10 text-red-500 rounded-2xl flex-shrink-0"><Icon name="trash-2" size={16}/></button>
                                                 </div>
                                             ))}
                                         </div>
@@ -492,10 +688,10 @@
                     </main>
 
                     {/* Navbar Estática */}
-                    <nav className={`p-5 backdrop-blur-3xl border-t flex justify-around items-center z-50 transition-all duration-500 ${isDarkMode ? 'bg-slate-950/90 border-white/5 shadow-2xl' : 'bg-white border-slate-200 shadow-inner'}`}>
-                        <button onClick={() => {setView('user'); setStep(1)}} className={`flex flex-col items-center gap-1.5 transition-all duration-300 press-effect ${view === 'user' ? (isDarkMode ? 'text-white scale-110' : 'text-slate-950 scale-110') : 'text-slate-400'}`}><Icon name="calendar-days" size={24} /><span className="text-[8px] font-black uppercase tracking-widest italic font-logo">Agendar</span></button>
+                    <nav className="p-4 pb-6 backdrop-blur-3xl border-t border-slate-200 dark:border-white/5 flex justify-around items-center z-50 bg-white/90 dark:bg-[#020617]/90 transition-all duration-500">
+                        <button onClick={() => {setView('user'); setStep(1)}} className={`flex flex-col items-center gap-1.5 transition-all duration-300 press-effect ${view === 'user' ? 'text-slate-900 dark:text-white scale-110' : 'text-slate-400'}`}><Icon name="calendar-days" size={24} /><span className="text-[8px] font-black uppercase tracking-widest italic font-logo">Agendar</span></button>
                         <div className="w-px h-8 bg-slate-500/10"></div>
-                        <button onClick={() => setShowPinModal(true)} className={`flex flex-col items-center gap-1.5 transition-all duration-300 press-effect ${view === 'admin' ? (isDarkMode ? 'text-white scale-110' : 'text-slate-950 scale-110') : 'text-slate-400'}`}><Icon name="layout-dashboard" size={24} /><span className="text-[8px] font-black uppercase tracking-widest italic font-logo">Staff</span></button>
+                        <button onClick={() => setShowPinModal(true)} className={`flex flex-col items-center gap-1.5 transition-all duration-300 press-effect ${view === 'admin' ? 'text-slate-900 dark:text-white scale-110' : 'text-slate-400'} flex-shrink-0`}><Icon name="layout-dashboard" size={24} /><span className="text-[8px] font-black uppercase tracking-widest italic font-logo">Staff</span></button>
                     </nav>
 
                     {/* Modal PIN */}
@@ -512,10 +708,12 @@
                         </div>
                     )}
                 </div>
+                </div>
             );
         }
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
+
         root.render(<App />);
     </script>
 </body>
